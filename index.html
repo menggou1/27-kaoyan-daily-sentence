@@ -233,7 +233,7 @@ body{
 
     try {
       const text = decodeBase64Utf8(hit.b64);
-      render(text, '第 ' + hit.index + ' 句 · 共 ' + TOTAL + ' 句', false);
+      render(text, '每日一句', false);
     } catch (err) {
       console.error(err);
       render('今日内容解码失败', '', true);
