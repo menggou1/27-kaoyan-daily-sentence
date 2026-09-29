@@ -44,7 +44,13 @@
 ./fonts/LXGWWenKai-Regular.ttf
 ```
 
-推荐使用 `.woff2` 格式，体积更小、加载更快。如果只提供 `.ttf`，删除或注释掉 `@font-face` 中对应的 `woff2` 行即可。
+字体文件只需提供 **woff2 或 ttf 其中一种**，推荐使用 woff2，体积更小、加载更快。
+
+- 使用 woff2：将 `LXGWWenKai-Regular.woff2` 放到 `./fonts/` 目录下。
+- 使用 ttf：将 `LXGWWenKai-Regular.ttf` 放到 `./fonts/` 目录下。  
+  如果不想控制台出现 404，可以删除或注释掉 `@font-face` 中的 woff2 那一行。
+
+请确保文件名和路径与 HTML 中 `@font-face` 的 `src` 保持一致。
 
 ## 数据文件格式
 
