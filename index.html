@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>考研每日一句</title>
+
+<style>
+/* ============================================================
+   字体：霞鹜文楷（LXGW WenKai）
+   把字体文件放到 ./fonts/ 目录下即可生效
+   ============================================================ */
+@font-face{
+  font-family: 'LXGW WenKai';
+  src: url('./fonts/LXGWWenKai-Regular.woff2') format('woff2'),
+       url('./fonts/LXGWWenKai-Regular.ttf')   format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root{
+  --ink:        #3b332e;
+  --ink-soft:   #8a7c71;
+  --ink-faint:  rgba(138,124,113,.7);
+  --accent:     #b07d4e;
+  --card:       rgba(255,253,250,.80);
+}
+
+*{ box-sizing: border-box; }
+
+html,body{ height:100%; }
+
+body{
+  margin:0;
+  min-height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 28px 20px;
+  background:
+    radial-gradient(1100px 600px at 12% -12%, #fff9f0 0%, rgba(255,249,240,0) 62%),
+    radial-gradient(900px 520px at 112% 112%, #f2e7d8 0%, rgba(242,231,216,0) 58%),
+    #faf6f0;
+  color: var(--ink);
+  font-family: 'LXGW WenKai', '霞鹜文楷', 'Noto Serif SC', 'Source Han Serif SC',
+               'Songti SC', 'STSong', 'SimSun', serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- 卡片 ---------- */
+.card{
+  position: relative;
+  width: min(660px, 100%);
+  padding: clamp(34px, 6vw, 60px) clamp(24px, 5.5vw, 56px) clamp(28px, 4.5vw, 44px);
+  background: var(--card);
+  border: 1px solid rgba(176,125,78,.18);
+  border-radius: 24px;
+  text-align: center;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow:
+    0 24px 60px -28px rgba(120, 90, 60, .45),
+    0 2px 4px rgba(120, 90, 60, .05),
+    inset 0 1px 0 rgba(255,255,255,.9);
+  animation: rise .9s cubic-bezier(.16,.84,.32,1) both;
+}
+
+.card::before{
+  content:'';
+  position:absolute;
+  top:-1px; left:14%; right:14%;
+  height:2px;
+  border-radius:2px;
+  background: linear-gradient(90deg, transparent, rgba(176,125,78,.55), transparent);
+}
+
+@keyframes rise{
+  from{ opacity:0; transform: translateY(14px) scale(.985); }
+  to  { opacity:1; transform: none; }
+}
+
+/* ---------- 日期 ---------- */
+.eyebrow{
+  margin: 0 0 12px;
+  font-size: 13px;
+  letter-spacing: .55em;
+  text-indent: .55em;
+  color: var(--ink-soft);
+}
+
+.date{
+  margin: 0;
+  font-size: clamp(30px, 7vw, 46px);
+  line-height: 1.12;
+  letter-spacing: .06em;
+  font-variant-numeric: tabular-nums;
+  color: #2e2722;
+}
+
+/* ---------- 分隔线 ---------- */
+.rule{
+  position: relative;
+  width: 120px;
+  height: 1px;
+  margin: 26px auto 30px;
+  background: linear-gradient(90deg, transparent, rgba(176,125,78,.55), transparent);
+}
+.rule::after{
+  content:'';
+  position:absolute; left:50%; top:50%;
+  width:5px; height:5px;
+  background: var(--accent);
+  opacity:.75;
+  transform: translate(-50%,-50%) rotate(45deg);
+}
+
+/* ---------- 句子 ---------- */
+.sentence{
+  margin: 0;
+  font-size: clamp(18px, 4.4vw, 24px);
+  line-height: 2.05;
+  letter-spacing: .045em;
+  color: #332c27;
+  word-break: break-word;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity .8s ease, transform .8s cubic-bezier(.2,.7,.3,1);
+}
+.sentence.show{ opacity:1; transform:none; }
+
+.sentence.muted{
+  font-size: clamp(15px, 3.4vw, 18px);
+  letter-spacing: .12em;
+  color: var(--ink-faint);
+}
+
+/* ---------- 底部小字 ---------- */
+.meta{
+  margin-top: 26px;
+  min-height: 1em;
+  font-size: 12.5px;
+  letter-spacing: .22em;
+  text-indent: .22em;
+  color: var(--ink-faint);
+}
+
+@media (max-width: 480px){
+  .card{ border-radius: 20px; }
+  .sentence{ line-height: 1.95; }
+}
+</style>
+</head>
+
+<body>
+  <main class="card">
+    <p class="eyebrow">今日</p>
+    <h1 class="date" id="date">--</h1>
+
+    <div class="rule"></div>
+
+    <p class="sentence" id="sentence">正在载入…</p>
+    <p class="meta" id="meta"></p>
+  </main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* 数据文件（相对路径，部署到 GitHub Pages 时与 index.html 同级） */
+  const DATA_URL = './考研每日一句_83天_Base64.txt';
+  const TOTAL    = 83;
+
+  const pad2 = n => String(n).padStart(2, '0');
+
+  /* 本地时区的 yyyy-mm-dd */
+  function localDateKey(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  /* Base64(UTF-8) → 中文 */
+  function decodeBase64Utf8(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+
+  const dateEl     = document.getElementById('date');
+  const sentenceEl = document.getElementById('sentence');
+  const metaEl     = document.getElementById('meta');
+
+  const now = new Date();
+  const key = localDateKey(now);
+
+  /* 2026 年只显示 mm-dd，其余年份显示 yyyy-mm-dd */
+  dateEl.textContent = (now.getFullYear() === 2026) ? key.slice(5) : key;
+
+  function render(text, meta, muted) {
+    sentenceEl.textContent = text;
+    metaEl.textContent = meta || '';
+    sentenceEl.classList.toggle('muted', !!muted);
+    requestAnimationFrame(() => sentenceEl.classList.add('show'));
+  }
+
+  (async function main() {
+    let raw;
+    try {
+      const res = await fetch(DATA_URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      raw = await res.text();
+    } catch (err) {
+      console.error(err);
+      render('数据加载失败，请稍后再试', '', true);
+      return;
+    }
+
+    /* 逐行匹配：日期 \t 序号 \t Base64 */
+    let hit = null;
+    for (const line of raw.split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t) continue;
+      const parts = t.split(/\s+/);
+      if (parts.length < 3) continue;
+      if (parts[0] === key) { hit = { index: parts[1], b64: parts[2] }; break; }
+    }
+
+    if (!hit) {
+      render('不在2027考研初试备考时间', '', true);
+      return;
+    }
+
+    try {
+      const text = decodeBase64Utf8(hit.b64);
+      render(text, '第 ' + hit.index + ' 句 · 共 ' + TOTAL + ' 句', false);
+    } catch (err) {
+      console.error(err);
+      render('今日内容解码失败', '', true);
+    }
+  })();
+})();
+</script>
+</body>
+</html>
