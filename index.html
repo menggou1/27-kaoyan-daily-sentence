@@ -4,6 +4,14 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>考研每日一句</title>
+<meta name="color-scheme" content="light dark" />
+<script>
+// 在绘制页面前恢复配色，避免夜间模式闪白。
+try {
+  const theme = localStorage.getItem('kaoyan-theme');
+  if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+} catch (_) { /* 存储不可用时跟随系统配色。 */ }
+</script>
 
 <style>
 /* ============================================================
@@ -25,11 +33,30 @@
   --ink-faint:  rgba(138,124,113,.7);
   --accent:     #b07d4e;
   --card:       rgba(255,253,250,.80);
+  --paper:      #faf6f0;
+  --glow:       #fff9f0;
+  --shade:      #f2e7d8;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink: #eadfd2; --ink-soft: #c4b3a2; --ink-faint: #b7a693;
+    --accent: #d5a679; --card: rgba(43,37,32,.94);
+    --paper: #211c18; --glow: #352b23; --shade: #302820;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --ink: #eadfd2; --ink-soft: #c4b3a2; --ink-faint: #b7a693;
+  --accent: #d5a679; --card: rgba(43,37,32,.94);
+  --paper: #211c18; --glow: #352b23; --shade: #302820;
+  color-scheme: dark;
 }
 
 *{ box-sizing: border-box; }
 
-html,body{ height:100%; }
+html{ min-height:100%; }
 
 body{
   margin:0;
@@ -39,14 +66,15 @@ body{
   justify-content:center;
   padding: 28px 20px;
   background:
-    radial-gradient(1100px 600px at 12% -12%, #fff9f0 0%, rgba(255,249,240,0) 62%),
-    radial-gradient(900px 520px at 112% 112%, #f2e7d8 0%, rgba(242,231,216,0) 58%),
-    #faf6f0;
+    radial-gradient(1100px 600px at 12% -12%, var(--glow) 0%, transparent 62%),
+    radial-gradient(900px 520px at 112% 112%, var(--shade) 0%, transparent 58%),
+    var(--paper);
   color: var(--ink);
   font-family: 'LXGW WenKai', '霞鹜文楷', 'Noto Serif SC', 'Source Han Serif SC',
                'Songti SC', 'STSong', 'SimSun', serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  min-height:100vh;
 }
 
 /* ---------- 卡片 ---------- */
@@ -96,7 +124,7 @@ body{
   line-height: 1.12;
   letter-spacing: .06em;
   font-variant-numeric: tabular-nums;
-  color: #2e2722;
+  color: var(--ink);
 }
 
 /* ---------- 分隔线 ---------- */
@@ -122,7 +150,7 @@ body{
   font-size: clamp(18px, 4.4vw, 24px);
   line-height: 2.05;
   letter-spacing: .045em;
-  color: #332c27;
+  color: var(--ink);
   word-break: break-word;
   opacity: 0;
   transform: translateY(8px);
@@ -146,6 +174,36 @@ body{
   color: var(--ink-faint);
 }
 
+/* ---------- 阅读配色与往期回看 ---------- */
+.toolbar{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin: -12px 0 20px; }
+.repo-link{
+  display:inline-flex; align-items:center; gap:6px;
+  color:var(--ink-soft); font-size:14px; text-decoration:none; padding:8px 0;
+}
+.repo-link:hover{ color:var(--accent); }
+.repo-link svg{ width:18px; height:18px; flex-shrink:0; fill:currentColor; }
+.theme-toggle{
+  font: inherit; font-size:14px; color:var(--ink-soft);
+  background:transparent; border:1px solid rgba(176,125,78,.3);
+  border-radius:999px; padding:8px 14px; cursor:pointer;
+}
+.theme-toggle:hover{ color:var(--ink); background:var(--paper); }
+:focus-visible{ outline:2px solid var(--accent); outline-offset:5px; }
+.archive{ margin-top:32px; border-top:1px solid rgba(176,125,78,.22); text-align:left; }
+.archive summary{ padding:20px 0 4px; cursor:pointer; color:var(--ink-soft); font-size:16px; }
+.archive summary::marker{ color:var(--accent); }
+.archive-count{ font-size:13px; margin-left:8px; }
+.archive-note{ font-size:13px; color:var(--ink-soft); line-height:1.8; }
+.archive-list{ list-style:none; padding:0; margin:0; max-height: min(55vh, 480px); overflow-y:auto; overscroll-behavior:contain; }
+.archive-item{ padding:20px 4px; border-top:1px solid rgba(176,125,78,.16); }
+.archive-item time{ font-size:13px; color:var(--accent); font-variant-numeric:tabular-nums; }
+.archive-item p{ margin:8px 0 0; font-size:17px; line-height:1.9; overflow-wrap:anywhere; }
+.archive-status{ color:var(--ink-soft); font-size:14px; line-height:1.8; }
+@media (prefers-reduced-motion: reduce){
+  .card{ animation:none; }
+  .sentence{ transition:none; }
+}
+
 @media (max-width: 480px){
   .card{ border-radius: 20px; }
   .sentence{ line-height: 1.95; }
@@ -155,13 +213,26 @@ body{
 
 <body>
   <main class="card">
+    <div class="toolbar">
+      <a class="repo-link" href="https://github.com/menggou1/27-kaoyan-daily-sentence" target="_blank" rel="noopener noreferrer" aria-label="GitHub 仓库（在新标签页打开）">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2.14c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.68 0-1.25.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.16 1.18A11.02 11.02 0 0 1 12 6.03c.98 0 1.96.13 2.88.39 2.2-1.49 3.16-1.18 3.16-1.18.62 1.59.23 2.76.11 3.05.73.81 1.18 1.84 1.18 3.09 0 4.41-2.69 5.39-5.25 5.67.41.36.78 1.06.78 2.14v3.16c0 .31.21.67.79.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/></svg>
+        <span>GitHub 仓库</span>
+      </a>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">夜间阅读</button>
+    </div>
     <p class="eyebrow">今日</p>
     <h1 class="date" id="date">--</h1>
 
     <div class="rule"></div>
 
-    <p class="sentence" id="sentence">正在载入…</p>
+    <p class="sentence show" id="sentence" aria-live="polite">正在载入…</p>
     <p class="meta" id="meta"></p>
+    <details class="archive" id="archive">
+      <summary>往期每日一句<span class="archive-count" id="archive-count"></span></summary>
+      <p class="archive-note">把走过的日子，再温习一遍。这里只收录今天之前的句子。</p>
+      <p class="archive-status" id="archive-status" role="status">正在载入往期内容…</p>
+      <ol class="archive-list" id="archive-list" aria-label="往期每日一句，按日期从近到远排列"></ol>
+    </details>
   </main>
 
 <script>
@@ -170,7 +241,6 @@ body{
 
   /* 数据文件（相对路径，部署到 GitHub Pages 时与 index.html 同级） */
   const DATA_URL = './考研每日一句_83天_Base64.txt';
-  const TOTAL    = 83;
 
   const pad2 = n => String(n).padStart(2, '0');
 
@@ -190,9 +260,39 @@ body{
   const dateEl     = document.getElementById('date');
   const sentenceEl = document.getElementById('sentence');
   const metaEl     = document.getElementById('meta');
+  const archiveEl = document.getElementById('archive');
+  const archiveCountEl = document.getElementById('archive-count');
+  const archiveStatusEl = document.getElementById('archive-status');
+  const archiveListEl = document.getElementById('archive-list');
+  const themeToggleEl = document.getElementById('theme-toggle');
+  const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+
+  function isDark() {
+    const theme = document.documentElement.dataset.theme;
+    return theme ? theme === 'dark' : systemTheme.matches;
+  }
+  function updateThemeButton() {
+    const dark = isDark();
+    themeToggleEl.textContent = dark ? '日间阅读' : '夜间阅读';
+    themeToggleEl.setAttribute('aria-pressed', String(dark));
+  }
+  themeToggleEl.addEventListener('click', () => {
+    const theme = isDark() ? 'light' : 'dark';
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem('kaoyan-theme', theme); } catch (_) { /* 仍可切换当前页面。 */ }
+    updateThemeButton();
+  });
+  systemTheme.addEventListener('change', updateThemeButton);
+  updateThemeButton();
 
   const now = new Date();
   const key = localDateKey(now);
+  // 页面跨过本地午夜后重新匹配日期，避免今天的句子留在昨日位置。
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  setTimeout(() => window.location.reload(), midnight - now + 100);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && localDateKey(new Date()) !== key) window.location.reload();
+  });
 
   /* 2026 年只显示 mm-dd，其余年份显示 yyyy-mm-dd */
   dateEl.textContent = (now.getFullYear() === 2026) ? key.slice(5) : key;
@@ -204,6 +304,29 @@ body{
     requestAnimationFrame(() => sentenceEl.classList.add('show'));
   }
 
+  let pastEntries = [];
+  let archiveReady = false;
+  let archiveRendered = false;
+  function renderArchive() {
+    if (!archiveReady || archiveRendered || !archiveEl.open) return;
+    archiveRendered = true;
+    const fragment = document.createDocumentFragment();
+    for (const entry of pastEntries) {
+      const item = document.createElement('li');
+      item.className = 'archive-item';
+      const date = document.createElement('time');
+      date.dateTime = entry.date;
+      date.textContent = entry.date;
+      const sentence = document.createElement('p');
+      try { sentence.textContent = decodeBase64Utf8(entry.b64); }
+      catch (_) { sentence.textContent = '这一天的内容暂时无法解码。'; }
+      item.append(date, sentence);
+      fragment.append(item);
+    }
+    archiveListEl.append(fragment);
+  }
+  archiveEl.addEventListener('toggle', renderArchive);
+
   (async function main() {
     let raw;
     try {
@@ -213,18 +336,28 @@ body{
     } catch (err) {
       console.error(err);
       render('数据加载失败，请稍后再试', '', true);
+      archiveStatusEl.textContent = '往期内容加载失败，请刷新页面重试。';
       return;
     }
 
-    /* 逐行匹配：日期 \t 序号 \t Base64 */
-    let hit = null;
+    /* 只收集今日和过去的记录，未来内容不解码。日期使用本地日历。 */
+    const entries = new Map();
     for (const line of raw.split(/\r?\n/)) {
       const t = line.trim();
       if (!t) continue;
       const parts = t.split(/\s+/);
-      if (parts.length < 3) continue;
-      if (parts[0] === key) { hit = { index: parts[1], b64: parts[2] }; break; }
+      if (parts.length < 3 || !/^\d{4}-\d{2}-\d{2}$/.test(parts[0])) continue;
+      if (parts[0] <= key) entries.set(parts[0], { date: parts[0], b64: parts[2] });
     }
+    const hit = entries.get(key);
+    pastEntries = Array.from(entries.values())
+      .filter(entry => entry.date < key)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    archiveReady = true;
+    archiveCountEl.textContent = '· ' + pastEntries.length + ' 句';
+    archiveStatusEl.textContent = pastEntries.length ? '' : '还没有往期句子，明天再来看看吧。';
+    archiveStatusEl.hidden = pastEntries.length > 0;
+    renderArchive();
 
     if (!hit) {
       render('不在2027考研初试备考时间', '', true);
