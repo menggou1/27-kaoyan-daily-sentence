@@ -64,7 +64,7 @@ body{
   display:flex;
   align-items:center;
   justify-content:center;
-  padding: 28px 20px;
+  padding: 28px 20px 76px;
   background:
     radial-gradient(1100px 600px at 12% -12%, var(--glow) 0%, transparent 62%),
     radial-gradient(900px 520px at 112% 112%, var(--shade) 0%, transparent 58%),
@@ -175,8 +175,9 @@ body{
 }
 
 /* ---------- 阅读配色与往期回看 ---------- */
-.toolbar{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin: -12px 0 20px; }
+.toolbar{ display:flex; justify-content:flex-end; align-items:center; gap:12px; margin: -12px 0 20px; }
 .repo-link{
+  position:fixed; bottom:16px; left:20px; z-index:2;
   display:inline-flex; align-items:center; gap:6px;
   color:var(--ink-soft); font-size:14px; text-decoration:none; padding:8px 0;
 }
@@ -199,6 +200,21 @@ body{
 .archive-item time{ font-size:13px; color:var(--accent); font-variant-numeric:tabular-nums; }
 .archive-item p{ margin:8px 0 0; font-size:17px; line-height:1.9; overflow-wrap:anywhere; }
 .archive-status{ color:var(--ink-soft); font-size:14px; line-height:1.8; }
+.date-trigger{ font:inherit; color:inherit; letter-spacing:inherit; background:none; border:0; padding:0; cursor:default; }
+.countdown{ margin:20px 0 0; }
+.countdown-label{ margin:0 0 8px; font-size:12px; color:var(--ink-soft); letter-spacing:.08em; }
+.countdown-value{ margin:0; color:var(--accent); font-size:clamp(19px, 4.5vw, 24px); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.countdown-value small{ font-size:12px; margin:0 8px 0 3px; color:var(--ink-soft); }
+.countdown-value small:last-child{ margin-right:0; }
+.clock-status{ display:block; margin-top:8px; font-size:11px; color:var(--ink-faint); }
+.dev-panel{ width:min(420px, calc(100% - 32px)); padding:26px; border:1px solid var(--accent); border-radius:20px; background:var(--paper); color:var(--ink); font:inherit; box-shadow:0 20px 70px rgba(0,0,0,.2); }
+.dev-panel::backdrop{ background:rgba(30,25,20,.35); backdrop-filter:blur(3px); }
+.dev-panel h2{ margin:0 0 16px; font-size:22px; }
+.dev-panel p{ font-size:14px; line-height:1.8; color:var(--ink-soft); }
+.dev-panel label{ display:block; font-size:14px; margin-bottom:8px; }
+.dev-panel input{ width:100%; min-width:0; padding:10px; font:inherit; color:var(--ink); background:var(--card); border:1px solid var(--ink-faint); border-radius:8px; }
+.dev-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+.dev-feedback{ min-height:1.8em; }
 @media (prefers-reduced-motion: reduce){
   .card{ animation:none; }
   .sentence{ transition:none; }
@@ -212,16 +228,22 @@ body{
 </head>
 
 <body>
-  <main class="card">
-    <div class="toolbar">
       <a class="repo-link" href="https://github.com/menggou1/27-kaoyan-daily-sentence" target="_blank" rel="noopener noreferrer" aria-label="GitHub 仓库（在新标签页打开）">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2.14c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.68 0-1.25.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.16 1.18A11.02 11.02 0 0 1 12 6.03c.98 0 1.96.13 2.88.39 2.2-1.49 3.16-1.18 3.16-1.18.62 1.59.23 2.76.11 3.05.73.81 1.18 1.84 1.18 3.09 0 4.41-2.69 5.39-5.25 5.67.41.36.78 1.06.78 2.14v3.16c0 .31.21.67.79.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/></svg>
         <span>GitHub 仓库</span>
       </a>
+  <main class="card">
+    <div class="toolbar">
+
       <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">夜间阅读</button>
     </div>
     <p class="eyebrow">今日</p>
-    <h1 class="date" id="date">--</h1>
+    <h1 class="date"><button class="date-trigger" id="date" type="button">--</button></h1>
+    <section class="countdown" aria-label="2027 考研初试倒计时">
+      <p class="countdown-label" id="countdown-label">距 12 月 19 日 08:30</p>
+      <p class="countdown-value" id="countdown" role="timer" aria-live="off">--<small>天</small>--<small>时</small>--<small>分</small>--<small>秒</small></p>
+      <span class="clock-status" id="clock-status">北京时间 · 本地时间</span>
+    </section>
 
     <div class="rule"></div>
 
@@ -234,6 +256,20 @@ body{
       <ol class="archive-list" id="archive-list" aria-label="往期每日一句，按日期从近到远排列"></ol>
     </details>
   </main>
+  <dialog class="dev-panel" id="dev-panel" aria-labelledby="dev-title">
+    <form id="dev-form">
+      <h2 id="dev-title">开发者模式</h2>
+      <p>调整北京时间，预览对应日期的句子和倒计时。模拟时间从设定时刻继续走动，仅在当前页面生效。</p>
+      <label for="dev-time">模拟时间（北京时间）</label>
+      <input id="dev-time" type="datetime-local" step="1" required min="2000-01-01T00:00" max="2100-12-31T23:59:59" />
+      <div class="dev-actions">
+        <button class="theme-toggle" type="submit">应用时间</button>
+        <button class="theme-toggle" id="dev-reset" type="button">退出并恢复真实时间</button>
+        <button class="theme-toggle" id="dev-close" type="button">收起</button>
+      </div>
+      <p class="dev-feedback" id="dev-feedback" role="status"></p>
+    </form>
+  </dialog>
 
 <script>
 (function () {
@@ -244,9 +280,15 @@ body{
 
   const pad2 = n => String(n).padStart(2, '0');
 
-  /* 本地时区的 yyyy-mm-dd */
+  const TIME_API = 'https://utctime.app/api/now';
+  const EXAM_TIME = Date.parse('2026-12-19T08:30:00+08:00');
+  const SYNC_INTERVAL = 10 * 60 * 1000;
+  const BEIJING_OFFSET = 8 * 60 * 60 * 1000;
+
+  /* 显示、数据匹配和手动输入统一使用北京时间，不受设备时区影响。 */
   function localDateKey(d) {
-    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+    const bj = new Date(d.getTime() + BEIJING_OFFSET);
+    return bj.getUTCFullYear() + '-' + pad2(bj.getUTCMonth() + 1) + '-' + pad2(bj.getUTCDate());
   }
 
   /* Base64(UTF-8) → 中文 */
@@ -285,17 +327,115 @@ body{
   systemTheme.addEventListener('change', updateThemeButton);
   updateThemeButton();
 
-  const now = new Date();
-  const key = localDateKey(now);
-  // 页面跨过本地午夜后重新匹配日期，避免今天的句子留在昨日位置。
-  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  setTimeout(() => window.location.reload(), midnight - now + 100);
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && localDateKey(new Date()) !== key) window.location.reload();
-  });
+  const countdownEl = document.getElementById('countdown');
+  const countdownLabelEl = document.getElementById('countdown-label');
+  const clockStatusEl = document.getElementById('clock-status');
+  const devPanel = document.getElementById('dev-panel');
+  const devTime = document.getElementById('dev-time');
+  const devFeedback = document.getElementById('dev-feedback');
+  let networkClock = null;
+  let simulatedClock = null;
+  let syncPending = false;
+  let lastSyncAttempt = -Infinity;
+  let syncFailed = false;
+  let key = '';
+  let entries = null;
 
-  /* 2026 年只显示 mm-dd，其余年份显示 yyyy-mm-dd */
-  dateEl.textContent = (now.getFullYear() === 2026) ? key.slice(5) : key;
+  function clockNow() {
+    const anchor = simulatedClock || networkClock;
+    return anchor ? anchor.time + performance.now() - anchor.tick : Date.now();
+  }
+
+  function updateClock() {
+    const now = clockNow();
+    const nextKey = localDateKey(new Date(now));
+    if (nextKey !== key) {
+      key = nextKey;
+      dateEl.textContent = key.startsWith('2026-') ? key.slice(5) : key;
+      if (entries) updateContent();
+    }
+    const seconds = Math.max(0, Math.ceil((EXAM_TIME - now) / 1000));
+    const values = [Math.floor(seconds / 86400), Math.floor(seconds / 3600) % 24,
+      Math.floor(seconds / 60) % 60, seconds % 60];
+    const countdownHTML = values.map((value, i) => pad2(value) + '<small>' + ['天', '时', '分', '秒'][i] + '</small>').join('');
+    if (countdownEl.innerHTML !== countdownHTML) countdownEl.innerHTML = countdownHTML;
+    countdownLabelEl.textContent = now >= EXAM_TIME ? '目标时间已到 · 愿你从容落笔' : '距 12 月 19 日 08:30';
+    clockStatusEl.textContent = '北京时间 · ' + (simulatedClock ? '模拟时间' : networkClock
+      ? (syncFailed ? '网络校时保持中' : '已网络校时') : '本地时间');
+    clockStatusEl.title = simulatedClock ? '开发者模式：使用手动设置的时间' : networkClock
+      ? 'UTCTime 网络校时；每 10 分钟重新同步' : '网络时间不可用或正在校时，使用设备时间作为保障';
+  }
+
+  async function syncClock(force = false) {
+    if (syncPending || (!force && performance.now() - lastSyncAttempt < SYNC_INTERVAL)) return;
+    syncPending = true;
+    lastSyncAttempt = performance.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const start = performance.now();
+    try {
+      const response = await fetch(TIME_API, { cache:'no-store', credentials:'omit', signal:controller.signal });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const data = await response.json();
+      const end = performance.now();
+      if (!Number.isSafeInteger(data.unix_ms) || data.unix_ms < Date.UTC(2020, 0, 1)
+          || data.unix_ms > Date.UTC(2101, 0, 1) || end - start > 5000) throw new Error('无效的时间响应');
+      // 近似补偿单程延迟；之后用单调时钟走动，避免设备改时造成跳变。
+      networkClock = { time:data.unix_ms + (end - start) / 2, tick:end };
+      syncFailed = false;
+    } catch (_) {
+      // 初次失败使用本地时间；已有网络锚点时继续走动，保留上次校时结果。
+      syncFailed = true;
+    } finally {
+      clearTimeout(timeout);
+      syncPending = false;
+      updateClock();
+    }
+  }
+
+  function openDeveloper() {
+    if (devPanel.open) return;
+    devTime.value = new Date(clockNow() + BEIJING_OFFSET).toISOString().slice(0, 19);
+    devFeedback.textContent = simulatedClock ? '当前正在使用模拟时间。' : '';
+    devPanel.showModal();
+  }
+  let dateClicks = [];
+  dateEl.addEventListener('click', () => {
+    const tick = performance.now();
+    dateClicks = dateClicks.filter(value => tick - value < 2500);
+    dateClicks.push(tick);
+    if (dateClicks.length >= 5) { dateClicks = []; openDeveloper(); }
+  });
+  document.addEventListener('keydown', event => {
+    if (event.ctrlKey && event.altKey && event.code === 'KeyD' && !event.repeat) {
+      event.preventDefault();
+      openDeveloper();
+    }
+  });
+  document.getElementById('dev-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const value = devTime.value;
+    const fullValue = value.length === 16 ? value + ':00' : value;
+    const time = Date.parse(fullValue + '+08:00');
+    if (!Number.isFinite(time) || new Date(time + BEIJING_OFFSET).toISOString().slice(0, 19) !== fullValue) {
+      devFeedback.textContent = '请输入有效的日期和时间。';
+      return;
+    }
+    simulatedClock = { time, tick:performance.now() };
+    updateClock();
+    devFeedback.textContent = '已应用模拟时间，收起面板后可查看页面。';
+  });
+  document.getElementById('dev-close').addEventListener('click', () => devPanel.close());
+  document.getElementById('dev-reset').addEventListener('click', () => {
+    simulatedClock = null;
+    updateClock();
+    devPanel.close();
+    syncClock(true);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { updateClock(); syncClock(); }
+  });
+  window.addEventListener('online', () => syncClock(true));
 
   function render(text, meta, muted) {
     sentenceEl.textContent = text;
@@ -327,6 +467,31 @@ body{
   }
   archiveEl.addEventListener('toggle', renderArchive);
 
+  function updateContent() {
+    const hit = entries.get(key);
+    pastEntries = Array.from(entries.values())
+      .filter(entry => entry.date < key)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    archiveReady = true;
+    archiveRendered = false;
+    archiveListEl.replaceChildren();
+    archiveCountEl.textContent = '· ' + pastEntries.length + ' 句';
+    archiveStatusEl.textContent = pastEntries.length ? '' : '还没有往期句子，明天再来看看吧。';
+    archiveStatusEl.hidden = pastEntries.length > 0;
+    renderArchive();
+    if (!hit) {
+      render('不在2027考研初试备考时间', '', true);
+      return;
+    }
+    try { render(decodeBase64Utf8(hit.b64), '每日一句', false); }
+    catch (_) { render('今日内容解码失败', '', true); }
+  }
+
+  updateClock();
+  syncClock();
+  // 每次根据绝对时间重算，不累减计数，后台节流后也能立即追上。
+  setInterval(() => { updateClock(); if (!document.hidden) syncClock(); }, 250);
+
   (async function main() {
     let raw;
     try {
@@ -340,37 +505,16 @@ body{
       return;
     }
 
-    /* 只收集今日和过去的记录，未来内容不解码。日期使用本地日历。 */
-    const entries = new Map();
+    /* 保存编码记录，以便跨日/模拟时间切换；仅解码今日和展开的往期。 */
+    entries = new Map();
     for (const line of raw.split(/\r?\n/)) {
       const t = line.trim();
       if (!t) continue;
       const parts = t.split(/\s+/);
       if (parts.length < 3 || !/^\d{4}-\d{2}-\d{2}$/.test(parts[0])) continue;
-      if (parts[0] <= key) entries.set(parts[0], { date: parts[0], b64: parts[2] });
+      entries.set(parts[0], { date: parts[0], b64: parts[2] });
     }
-    const hit = entries.get(key);
-    pastEntries = Array.from(entries.values())
-      .filter(entry => entry.date < key)
-      .sort((a, b) => b.date.localeCompare(a.date));
-    archiveReady = true;
-    archiveCountEl.textContent = '· ' + pastEntries.length + ' 句';
-    archiveStatusEl.textContent = pastEntries.length ? '' : '还没有往期句子，明天再来看看吧。';
-    archiveStatusEl.hidden = pastEntries.length > 0;
-    renderArchive();
-
-    if (!hit) {
-      render('不在2027考研初试备考时间', '', true);
-      return;
-    }
-
-    try {
-      const text = decodeBase64Utf8(hit.b64);
-      render(text, '每日一句', false);
-    } catch (err) {
-      console.error(err);
-      render('今日内容解码失败', '', true);
-    }
+    updateContent();
   })();
 })();
 </script>
