@@ -277,6 +277,9 @@ body{
 
   /* 数据文件（相对路径，部署到 GitHub Pages 时与 index.html 同级） */
   const DATA_URL = './考研每日一句_83天_Base64.txt';
+  const LEGACY_DATA_URL = './考研每日一句_古早版.txt';
+  const CURRENT_START = '2026-09-29';
+  const dataLoads = new Map();
 
   const pad2 = n => String(n).padStart(2, '0');
 
@@ -340,6 +343,8 @@ body{
   let syncFailed = false;
   let key = '';
   let entries = null;
+  let sourceErrors = new Set();
+  let contentLoad = 0;
 
   function clockNow() {
     const anchor = simulatedClock || networkClock;
@@ -352,7 +357,7 @@ body{
     if (nextKey !== key) {
       key = nextKey;
       dateEl.textContent = key.startsWith('2026-') ? key.slice(5) : key;
-      if (entries) updateContent();
+      loadContentForDate();
     }
     const seconds = Math.max(0, Math.ceil((EXAM_TIME - now) / 1000));
     const values = [Math.floor(seconds / 86400), Math.floor(seconds / 3600) % 24,
@@ -447,6 +452,9 @@ body{
   let pastEntries = [];
   let archiveReady = false;
   let archiveRendered = false;
+  function entryText(entry) {
+    return entry.text !== undefined ? entry.text : decodeBase64Utf8(entry.b64);
+  }
   function renderArchive() {
     if (!archiveReady || archiveRendered || !archiveEl.open) return;
     archiveRendered = true;
@@ -458,7 +466,7 @@ body{
       date.dateTime = entry.date;
       date.textContent = entry.date;
       const sentence = document.createElement('p');
-      try { sentence.textContent = decodeBase64Utf8(entry.b64); }
+      try { sentence.textContent = entryText(entry); }
       catch (_) { sentence.textContent = '这一天的内容暂时无法解码。'; }
       item.append(date, sentence);
       fragment.append(item);
@@ -476,46 +484,81 @@ body{
     archiveRendered = false;
     archiveListEl.replaceChildren();
     archiveCountEl.textContent = '· ' + pastEntries.length + ' 句';
-    archiveStatusEl.textContent = pastEntries.length ? '' : '还没有往期句子，明天再来看看吧。';
-    archiveStatusEl.hidden = pastEntries.length > 0;
+    archiveStatusEl.textContent = sourceErrors.size
+      ? '部分往期内容加载失败，请刷新页面重试。'
+      : pastEntries.length ? '' : '还没有往期句子，明天再来看看吧。';
+    archiveStatusEl.hidden = !sourceErrors.size && pastEntries.length > 0;
     renderArchive();
+    const todaySource = key < CURRENT_START ? LEGACY_DATA_URL : DATA_URL;
+    if (sourceErrors.has(todaySource)) {
+      render('数据加载失败，请稍后再试', '', true);
+      return;
+    }
     if (!hit) {
       render('不在2027考研初试备考时间', '', true);
       return;
     }
-    try { render(decodeBase64Utf8(hit.b64), '每日一句', false); }
+    try { render(entryText(hit), '每日一句', false); }
     catch (_) { render('今日内容解码失败', '', true); }
+  }
+
+  function loadDataSource(url) {
+    if (dataLoads.has(url)) return dataLoads.get(url);
+    const load = (async () => {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const raw = await res.text();
+      const records = new Map();
+      const legacy = url === LEGACY_DATA_URL;
+      for (const line of raw.split(/\r?\n/)) {
+        // 只切开日期和编号，保留明文句子中可能出现的空格。
+        const match = line.trim().match(/^(\d{4}-\d{2}-\d{2})\s+\d+\s+(.+)$/);
+        if (!match) continue;
+        const [, date, value] = match;
+        // 两份文件各自负责一段日期，边界由日期决定，与编号无关。
+        if (legacy ? date < '2026-01-01' || date >= CURRENT_START : date < CURRENT_START) continue;
+        records.set(date, legacy ? { date, text:value } : { date, b64:value });
+      }
+      return records;
+    })();
+    dataLoads.set(url, load);
+    // 失败时允许下次切换日期重新加载；已成功的数据无需重复请求。
+    load.catch(() => dataLoads.delete(url));
+    return load;
+  }
+
+  async function loadContentForDate() {
+    const request = ++contentLoad;
+    // 早期日期只读取古早版，不依赖之后的编码版是否可用。
+    const sources = key < CURRENT_START ? [LEGACY_DATA_URL] : [LEGACY_DATA_URL, DATA_URL];
+    entries = null;
+    archiveReady = false;
+    archiveRendered = false;
+    archiveListEl.replaceChildren();
+    archiveCountEl.textContent = '';
+    archiveStatusEl.hidden = false;
+    archiveStatusEl.textContent = '正在载入往期内容…';
+    render('正在载入…', '', false);
+    const results = await Promise.allSettled(sources.map(loadDataSource));
+    // 模拟时间或网络校时切换日期后，忽略较早请求的结果。
+    if (request !== contentLoad) return;
+    entries = new Map();
+    sourceErrors = new Set();
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        for (const [date, entry] of result.value) entries.set(date, entry);
+      } else {
+        sourceErrors.add(sources[i]);
+        console.error(result.reason);
+      }
+    });
+    updateContent();
   }
 
   updateClock();
   syncClock();
   // 每次根据绝对时间重算，不累减计数，后台节流后也能立即追上。
   setInterval(() => { updateClock(); if (!document.hidden) syncClock(); }, 250);
-
-  (async function main() {
-    let raw;
-    try {
-      const res = await fetch(DATA_URL, { cache: 'no-store' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      raw = await res.text();
-    } catch (err) {
-      console.error(err);
-      render('数据加载失败，请稍后再试', '', true);
-      archiveStatusEl.textContent = '往期内容加载失败，请刷新页面重试。';
-      return;
-    }
-
-    /* 保存编码记录，以便跨日/模拟时间切换；仅解码今日和展开的往期。 */
-    entries = new Map();
-    for (const line of raw.split(/\r?\n/)) {
-      const t = line.trim();
-      if (!t) continue;
-      const parts = t.split(/\s+/);
-      if (parts.length < 3 || !/^\d{4}-\d{2}-\d{2}$/.test(parts[0])) continue;
-      entries.set(parts[0], { date: parts[0], b64: parts[2] });
-    }
-    updateContent();
-  })();
 })();
 </script>
 </body>
