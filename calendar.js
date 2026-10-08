@@ -19,6 +19,49 @@
   const get = id => document.getElementById(id);
   const pad = value => String(value).padStart(2, '0');
   const stage = get('cal-stage');
+  const hoverMotion = window.matchMedia('(prefers-reduced-motion:reduce)');
+  const hoverStates = new Map();
+  const MIN_HOVER_MS = 240;
+
+  function clearDateHovers() {
+    for (const [button, state] of hoverStates) {
+      clearTimeout(state.timer);
+      button.classList.remove('is-hovered');
+    }
+    hoverStates.clear();
+  }
+
+  // Hold a brief pass until the entrance has completed, then fade out.
+  // Re-entering cancels only the pending exit, without restarting the entrance.
+  function enterDate(button) {
+    const state = hoverStates.get(button) || { started:performance.now(), timer:null };
+    clearTimeout(state.timer);
+    state.timer = null;
+    hoverStates.set(button, state);
+    button.classList.add('is-hovered');
+  }
+  function leaveDate(button) {
+    const state = hoverStates.get(button);
+    if (!state) return;
+    const delay = hoverMotion.matches ? 0 : Math.max(0, MIN_HOVER_MS - (performance.now() - state.started));
+    const finish = () => {
+      button.classList.remove('is-hovered');
+      hoverStates.delete(button);
+    };
+    clearTimeout(state.timer);
+    if (delay === 0) finish();
+    else state.timer = setTimeout(finish, delay);
+  }
+  for (const type of ['pointerover', 'pointerout']) {
+    stage.addEventListener(type, event => {
+      if (event.pointerType === 'touch') return;
+      const button = event.target.closest('.cal-day');
+      if (!button || !stage.contains(button) || button.contains(event.relatedTarget)) return;
+      if (type === 'pointerover') enterDate(button);
+      else leaveDate(button);
+    });
+  }
+  hoverMotion.addEventListener('change', clearDateHovers);
   const sourceStates = new Map([
     [api.LEGACY_DATA_URL, { status: 'idle', records: new Map(), version: 0 }],
     [api.DATA_URL, { status: 'idle', records: new Map(), version: 0 }]
@@ -240,6 +283,7 @@
   }
 
   function renderCalendar() {
+    clearDateHovers();
     const activeDate = stage.contains(document.activeElement) ? document.activeElement.dataset.date : null;
     const activeMonth = stage.contains(document.activeElement) ? document.activeElement.dataset.month : null;
     const grid = element('div', `cal-${view}-grid`);
@@ -425,7 +469,10 @@
   get('calendar-open').addEventListener('click', openCalendar);
   get('calendar-open-back').addEventListener('click', openCalendar);
   get('calendar-close').addEventListener('click', () => dialog.close());
-  dialog.addEventListener('close', () => opener?.focus({ preventScroll: true }));
+  dialog.addEventListener('close', () => {
+    clearDateHovers();
+    opener?.focus({ preventScroll: true });
+  });
   dialog.addEventListener('click', event => {
     if (event.target !== dialog) return;
     const rect = dialog.getBoundingClientRect();

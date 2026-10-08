@@ -116,8 +116,8 @@ html::-webkit-scrollbar-thumb,.calendar-dialog::-webkit-scrollbar-thumb,.archive
 .cal-day.is-exam small{ color:var(--exam-text); }
 .cal-day.is-exam::after{ background:var(--exam-text); }
 .cal-day.is-exam.is-today{ border:2px solid var(--ink); }
-.cal-day:hover{ background:var(--shade); }
-.cal-day.is-exam:hover{ background:var(--exam-fill); filter:brightness(1.1); }
+.cal-day.is-hovered{ background:var(--shade); }
+.cal-day.is-exam.is-hovered{ background:var(--exam-fill); filter:brightness(1.1); }
 .cal-day.is-selected{ z-index:2; box-shadow:0 0 0 2px var(--ink-soft); }
 /* One ribbon per week sits below every date, border and selection indicator. */
 .day-grid,.mini-grid{ position:relative; isolation:isolate; }
@@ -127,21 +127,21 @@ html::-webkit-scrollbar-thumb,.calendar-dialog::-webkit-scrollbar-thumb,.archive
 .cal-day.is-range.is-exam{ background:var(--exam-fill); border-color:var(--exam-fill); }
 .cal-day.is-range.is-exam.is-today{ border:2px solid var(--ink); }
 .cal-day.is-outside,.cal-day.is-outside.is-today{ color:var(--ink-soft); background:transparent; border:1px solid rgba(176,125,78,.14); }
-.cal-day.is-outside:hover{ background:var(--shade); }
+.cal-day.is-outside.is-hovered{ background:var(--shade); }
 .mini-grid span{ position:relative; z-index:1; }
 .mini-grid .range-band{ z-index:0; align-self:stretch; height:auto; line-height:normal; margin-block:0; border-radius:4px; }
 .mini-grid .is-outside{ color:var(--ink-soft); opacity:.8; background:transparent; outline:none; }
 .mini-grid .is-outside.is-today{ color:var(--ink-soft); background:transparent; outline:none; }
-.calendar-dialog .cal-day{ background:transparent; border-color:transparent; transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease; }
+.calendar-dialog .cal-day{ background:transparent; border-color:transparent; transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease,filter .18s ease; }
 .calendar-dialog .cal-day.is-today{ border-color:var(--accent); background:var(--today-fill); }
 .calendar-dialog .cal-day.is-exam{ border-color:var(--exam-fill); background:var(--exam-fill); }
 .calendar-dialog .cal-day.is-exam.is-today{ border-color:var(--ink); }
 .calendar-dialog .cal-day.is-outside{ background:transparent; border-color:transparent; }
 .calendar-dialog .cal-day.is-selected{ box-shadow:0 0 0 2px var(--accent); }
-.calendar-dialog .cal-day:hover{ background:var(--card); border-color:var(--accent); box-shadow:0 3px 10px rgba(120,90,60,.12); }
-.calendar-dialog .cal-day.is-today:hover{ background:var(--today-fill); }
-.calendar-dialog .cal-day.is-exam:hover{ background:var(--exam-fill); box-shadow:0 3px 12px rgba(120,90,60,.25); filter:brightness(1.08); }
-.calendar-dialog .cal-day.is-selected:hover{ box-shadow:0 0 0 2px var(--accent),0 3px 10px rgba(120,90,60,.12); }
+.calendar-dialog .cal-day.is-hovered{ background:var(--card); border-color:var(--accent); box-shadow:0 3px 10px rgba(120,90,60,.12); }
+.calendar-dialog .cal-day.is-today.is-hovered{ background:var(--today-fill); }
+.calendar-dialog .cal-day.is-exam.is-hovered{ background:var(--exam-fill); box-shadow:0 3px 12px rgba(120,90,60,.25); filter:brightness(1.08); }
+.calendar-dialog .cal-day.is-selected.is-hovered{ box-shadow:0 0 0 2px var(--accent),0 3px 10px rgba(120,90,60,.12); }
 .calendar-dialog .cal-day:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; }
 .calendar-dialog .cal-month-preview{ transition:border-color .16s ease,box-shadow .16s ease; }
 .calendar-dialog .cal-month-preview:hover{ background:var(--card); border-color:var(--accent); box-shadow:0 3px 12px rgba(120,90,60,.1); }
