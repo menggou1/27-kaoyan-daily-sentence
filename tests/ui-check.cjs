@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const { execFileSync } = require('node:child_process');
+const calendarHoverChecks = require('./calendar-hover.cjs');
 const root = path.resolve(__dirname, '..');
 const screenshotDir = process.env.SCREENSHOT_DIR;
 const types = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css', '.txt':'text/plain; charset=utf-8', '.svg':'image/svg+xml', '.ttf':'font/ttf' };
@@ -246,6 +247,7 @@ async function seamlessDayLanes(page) {
   check('Calendar keeps the daily warm palette and emphasizes the remaining segment', await interactive.locator('#journey-progress').evaluate(e => getComputedStyle(e).getPropertyValue('--remaining-color').trim() === getComputedStyle(document.getElementById('day-progress')).getPropertyValue('--remaining-color').trim() && getComputedStyle(e.querySelector('.sprint-remaining')).backgroundImage !== 'none'));
   check('Readable quote hides unrelated loading details', (await interactive.locator('#selected-meta').textContent()).includes('今日一句') && await interactive.locator('#quote-retry').isHidden() && !/古早|83 天|另一段|两段/.test(await interactive.locator('.quote-panel').textContent()));
   check('Calendar uses a slim themed scrollbar', await interactive.locator('#calendar-dialog').evaluate(e => getComputedStyle(e).scrollbarWidth === 'thin'));
+  await calendarHoverChecks(interactive, check);
   const hoverTiming = await interactive.locator('[data-date="2026-10-09"]').evaluate(async button => {
     const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
     const send = (type, relatedTarget = null) => button.dispatchEvent(new PointerEvent(type, {bubbles:true,pointerType:'mouse',relatedTarget}));

@@ -21,7 +21,14 @@
   const stage = get('cal-stage');
   const hoverMotion = window.matchMedia('(prefers-reduced-motion:reduce)');
   const hoverStates = new Map();
-  const MIN_HOVER_MS = 240;
+  const MIN_HOVER_MS = 160;
+  let hoverGeometry = null;
+  let lastPointer = null;
+
+  function invalidateHoverGeometry() {
+    hoverGeometry = null;
+    lastPointer = null;
+  }
 
   function clearDateHovers() {
     for (const [button, state] of hoverStates) {
@@ -29,12 +36,15 @@
       button.classList.remove('is-hovered');
     }
     hoverStates.clear();
+    invalidateHoverGeometry();
   }
 
   // Hold a brief pass until the entrance has completed, then fade out.
   // Re-entering cancels only the pending exit, without restarting the entrance.
   function enterDate(button) {
     const state = hoverStates.get(button) || { started:performance.now(), timer:null };
+    // A new pass renews visibility, without restarting an already visible entrance.
+    if (state.timer !== null) state.started = performance.now();
     clearTimeout(state.timer);
     state.timer = null;
     hoverStates.set(button, state);
@@ -42,7 +52,7 @@
   }
   function leaveDate(button) {
     const state = hoverStates.get(button);
-    if (!state) return;
+    if (!state || state.timer !== null) return;
     const delay = hoverMotion.matches ? 0 : Math.max(0, MIN_HOVER_MS - (performance.now() - state.started));
     const finish = () => {
       button.classList.remove('is-hovered');
@@ -62,6 +72,111 @@
     });
   }
   hoverMotion.addEventListener('change', clearDateHovers);
+
+  // Cache all layout reads together. Pointer samples only do geometry arithmetic
+  // and class writes; scroll, resize and rerender invalidate the cached rectangles.
+  function dateHoverGeometry() {
+    if (hoverGeometry) return hoverGeometry;
+    const rect = dialog.getBoundingClientRect();
+    const clip = {
+      left:Math.max(0, rect.left + dialog.clientLeft),
+      top:Math.max(0, rect.top + dialog.clientTop),
+      right:Math.min(window.innerWidth, rect.left + dialog.clientLeft + dialog.clientWidth),
+      bottom:Math.min(window.innerHeight, rect.top + dialog.clientTop + dialog.clientHeight)
+    };
+    hoverGeometry = [];
+    for (const button of stage.querySelectorAll('.cal-day')) {
+      const bounds = button.getBoundingClientRect();
+      const cell = {
+        button,
+        left:Math.max(clip.left, bounds.left), top:Math.max(clip.top, bounds.top),
+        right:Math.min(clip.right, bounds.right), bottom:Math.min(clip.bottom, bounds.bottom)
+      };
+      if (cell.left < cell.right && cell.top < cell.bottom) hoverGeometry.push(cell);
+    }
+    return hoverGeometry;
+  }
+
+  // Clip a line segment against a date rectangle. Return its entry fraction so
+  // skipped cells can be visited in travel order, in either direction or diagonally.
+  function crossingTime(from, to, rect) {
+    let entry = 0;
+    let exit = 1;
+    for (const [start, delta, min, max] of [
+      [from.x, to.x - from.x, rect.left, rect.right],
+      [from.y, to.y - from.y, rect.top, rect.bottom]
+    ]) {
+      if (delta === 0) {
+        if (start < min || start > max) return null;
+      } else {
+        const first = (min - start) / delta;
+        const last = (max - start) / delta;
+        entry = Math.max(entry, Math.min(first, last));
+        exit = Math.min(exit, Math.max(first, last));
+        if (entry > exit) return null;
+      }
+    }
+    return entry;
+  }
+
+  function traceDateHovers(event) {
+    if (!dialog.open || event.pointerType === 'touch') {
+      lastPointer = null;
+      return;
+    }
+    const target = event.target.closest?.('.cal-day');
+    const current = target && stage.contains(target) ? target : null;
+    // Keep native hover immediate. Reduced motion uses only the actual endpoint,
+    // with no reconstructed trail or minimum visibility timer.
+    if (hoverMotion.matches) {
+      lastPointer = null;
+      if (current) enterDate(current);
+      return;
+    }
+    const cells = dateHoverGeometry();
+    const crossed = new Set();
+    const previous = lastPointer?.id === event.pointerId ? lastPointer.current : null;
+    const samples = event.getCoalescedEvents?.() || [];
+    for (const sample of [...samples, event]) {
+      const point = { x:sample.clientX, y:sample.clientY, id:event.pointerId };
+      if (lastPointer && lastPointer.id === point.id) {
+        const hits = [];
+        for (const cell of cells) {
+          const entry = crossingTime(lastPointer, point, cell);
+          // Native pointerout already releases the previous real hover. Do not
+          // turn an ordinary departure after a long stay into a new trail pulse.
+          if (entry !== null && !(entry === 0 && cell.button === previous)) hits.push({ button:cell.button, entry });
+        }
+        hits.sort((a, b) => a.entry - b.entry);
+        for (const hit of hits) crossed.add(hit.button);
+      }
+      lastPointer = point;
+    }
+    lastPointer.current = current;
+    if (current) crossed.add(current);
+    for (const button of crossed) {
+      enterDate(button);
+      if (button !== current) leaveDate(button);
+    }
+  }
+
+  // Listen beyond the stage too: one sample can jump from the left gutter to the
+  // right gutter without ever targeting a date. No high-frequency raw listener.
+  document.addEventListener('pointermove', traceDateHovers, { passive:true });
+  document.addEventListener('pointerout', event => {
+    if (!event.relatedTarget) lastPointer = null;
+  });
+  document.addEventListener('pointercancel', clearDateHovers);
+  document.addEventListener('scroll', invalidateHoverGeometry, { capture:true, passive:true });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) clearDateHovers(); });
+  window.addEventListener('blur', clearDateHovers);
+  window.addEventListener('resize', invalidateHoverGeometry, { passive:true });
+  document.fonts?.addEventListener('loadingdone', invalidateHoverGeometry);
+  if (window.ResizeObserver) {
+    const hoverResize = new ResizeObserver(invalidateHoverGeometry);
+    hoverResize.observe(stage);
+    hoverResize.observe(dialog);
+  }
   const sourceStates = new Map([
     [api.LEGACY_DATA_URL, { status: 'idle', records: new Map(), version: 0 }],
     [api.DATA_URL, { status: 'idle', records: new Map(), version: 0 }]
