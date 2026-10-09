@@ -36,7 +36,9 @@
 .sprint-remaining{ position:absolute; left:var(--progress,0%); right:0; top:0; bottom:0; border-radius:inherit; overflow:hidden; transition:left 1s linear; }
 .sprint-marker{ position:absolute; z-index:2; left:10px; top:50%; width:22px; height:22px; transform:translate(-50%,-50%); border:2px solid var(--paper); border-radius:50%; color:var(--paper); background:var(--remaining-color); transition:left 1s linear; display:grid; place-items:center; }
 .day-progress .sprint-marker::before{ content:'»'; font:19px/1 system-ui,sans-serif; margin-top:-2px; }
-.day-progress .sprint-remaining::before{ content:''; position:absolute; inset:0; background:repeating-linear-gradient(110deg,transparent 0 12px,rgba(255,255,255,.3) 12px 18px,transparent 18px 36px); }
+/* Project the 36px horizontal tile onto the 110deg gradient: 36 * sin(110deg). */
+.day-progress{ --lane-cycle:36px; --lane-normal:33.828934px; }
+.day-progress .sprint-remaining::before{ content:''; position:absolute; inset:0 0 0 calc(-1 * var(--lane-cycle)); background:repeating-linear-gradient(110deg,transparent 0 calc(var(--lane-normal) / 3),rgba(255,255,255,.3) calc(var(--lane-normal) / 3) calc(var(--lane-normal) / 2),transparent calc(var(--lane-normal) / 2) var(--lane-normal)); background-size:var(--lane-cycle) 100%; }
 .day-progress.is-running .sprint-remaining::before{ animation:day-lanes .8s linear infinite; }
 .day-progress.is-running .sprint-marker{ animation:day-beat 1.6s ease-out infinite; }
 .day-progress.is-running .sprint-marker::before{ animation:day-arrow .7s ease-in-out infinite alternate; }
@@ -49,7 +51,7 @@
 .journey .is-running .sprint-remaining::before{ animation:calendar-glide 4.8s ease-in-out infinite; }
 .journey .is-urgent .sprint-remaining::before{ animation-duration:3.2s; }
 .day-progress{ margin:10px 0 24px; }
-@keyframes day-lanes{ to{ background-position:36px 0; } }
+@keyframes day-lanes{ from{ transform:translateX(0); } to{ transform:translateX(var(--lane-cycle)); } }
 @keyframes day-arrow{ from{ transform:translateX(-1.5px); } to{ transform:translateX(1.5px); } }
 @keyframes day-beat{ 0%{ box-shadow:0 0 0 0 color-mix(in srgb,var(--remaining-day) 40%,transparent); } 100%{ box-shadow:0 0 0 7px transparent; } }
 @keyframes calendar-glide{ 0%,15%{ transform:translateX(-120%); opacity:0; } 28%,75%{ opacity:1; } 100%{ transform:translateX(240%); opacity:0; } }

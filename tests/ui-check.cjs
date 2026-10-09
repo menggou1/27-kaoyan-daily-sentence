@@ -39,6 +39,53 @@ async function noOverflow(page, name) {
 async function shot(page, name) {
   if (screenshotDir) { fs.mkdirSync(screenshotDir, { recursive:true }); await page.screenshot({ path:path.join(screenshotDir, name + '.png'), fullPage:true }); }
 }
+async function seamlessDayLanes(page) {
+  const viewport = page.viewportSize();
+  // Freeze geometry while sampling the real rendered texture at the loop boundary.
+  const geometry = await page.addStyleTag({ content:'#day-progress .sprint-remaining{left:40% !important;transition:none} #day-fill,#day-marker{visibility:hidden}' });
+  for (const width of [1100, 375]) {
+    await page.setViewportSize({ width, height:900 });
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+      for (const urgent of [false, true]) {
+        const duration = await page.locator('#day-progress').evaluate((bar, urgent) => {
+          bar.classList.toggle('is-urgent', urgent);
+          const lanes = bar.getAnimations({subtree:true}).find(a => a.animationName === 'day-lanes');
+          return lanes.effect.getComputedTiming().duration;
+        }, urgent);
+        check(`Daily stripe speed (${width}px, ${theme}, ${urgent ? 'urgent' : 'normal'})`, duration === (urgent ? 500 : 800));
+        // The live clock updates urgency every 250ms; hold the chosen speed for this sample.
+        const speed = await page.addStyleTag({content:`#day-progress .sprint-remaining::before{animation-duration:${duration}ms !important}`});
+        await page.locator('#day-progress').evaluate(bar => {
+          const lanes = bar.getAnimations({subtree:true}).find(a => a.animationName === 'day-lanes');
+          lanes.pause();
+          lanes.currentTime = 0;
+        });
+        const remaining = page.locator('#day-progress .sprint-remaining');
+        const rect = await remaining.boundingBox();
+        const clip = {x:Math.ceil(rect.x) + 8,y:Math.ceil(rect.y) + 2,width:Math.floor(rect.width) - 16,height:6};
+        const start = await page.screenshot({clip});
+        await remaining.evaluate(e => e.style.right = '1px');
+        const resized = await page.screenshot({clip});
+        check(`Daily stripe phase survives remaining-width changes (${width}px, ${theme}, ${urgent ? 'urgent' : 'normal'})`, start.equals(resized));
+        await remaining.evaluate(e => e.style.removeProperty('right'));
+        await page.locator('#day-progress').evaluate((bar, duration) => {
+          bar.getAnimations({subtree:true}).find(a => a.animationName === 'day-lanes').currentTime = duration - .001;
+        }, duration);
+        const end = await page.screenshot({clip});
+        check(`Daily stripes loop seamlessly (${width}px, ${theme}, ${urgent ? 'urgent' : 'normal'})`, start.equals(end));
+        await speed.evaluate(e => e.remove());
+      }
+    }
+  }
+  await geometry.evaluate(e => e.remove());
+  await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
+  await page.setViewportSize(viewport);
+  await page.locator('#day-progress').evaluate(bar => {
+    bar.classList.remove('is-urgent');
+    bar.getAnimations({subtree:true}).find(a => a.animationName === 'day-lanes').play();
+  });
+}
 (async () => {
   const original = execFileSync('git', ['show','df29141:index.html'], { cwd:root, encoding:'utf8' });
   const current = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
@@ -186,6 +233,7 @@ async function shot(page, name) {
   check('Countdown clock hands move backwards', await interactive.locator('#clock-second').evaluate(e => Number(e.style.transform.match(/rotate\(([-.\d]+)deg\)/)[1])) < secondAngle);
   check('Daily remaining segment carries active moving lanes', await interactive.locator('#day-progress .sprint-remaining').evaluate(e => getComputedStyle(e, '::before').animationName === 'day-lanes'));
   check('Daily sprint marker has its own beat and forward arrow', await interactive.locator('#day-marker').evaluate(e => getComputedStyle(e).animationName === 'day-beat' && getComputedStyle(e, '::before').animationName === 'day-arrow'));
+  await seamlessDayLanes(interactive);
   await interactive.locator('#card-unflip').click();
   await interactive.waitForFunction(() => {
     const transform = getComputedStyle(document.querySelector('.card')).transform;
