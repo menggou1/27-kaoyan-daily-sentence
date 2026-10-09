@@ -72,7 +72,7 @@
     bar.classList.toggle('is-urgent', remaining <= 6 * 3600000);
     document.getElementById('day-fill').style.width = progress + '%';
     document.getElementById('day-marker').style.left = 'clamp(10px, ' + progress + '%, calc(100% - 10px))';
-    document.getElementById('dial-progress').setAttribute('stroke-dashoffset', String(100 - percent));
+    document.getElementById('dial-progress').setAttribute('stroke-dashoffset', String(progress));
     const reset = key !== dialDate;
     if (reset) dial.classList.add('is-resetting');
     // Remaining hours use a 24-hour face; minute and second hands also run backwards.

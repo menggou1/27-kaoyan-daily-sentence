@@ -87,6 +87,56 @@ async function seamlessDayLanes(page) {
     bar.getAnimations({subtree:true}).find(a => a.animationName === 'day-lanes').play();
   });
 }
+async function synchronizedDayReset(page) {
+  const result = await page.evaluate(async () => {
+    const api = window.KaoyanExtras;
+    const originalNow = api.now;
+    const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+    let now = Date.parse('2026-10-08T23:59:59.900+08:00');
+    const ring = document.getElementById('dial-progress');
+    const bar = document.getElementById('day-progress');
+    const fill = document.getElementById('day-fill');
+    const remaining = bar.querySelector('.sprint-remaining');
+    const marker = document.getElementById('day-marker');
+    api.now = () => now;
+    try {
+      await pause(1250);
+      const before = Number.parseFloat(getComputedStyle(ring).strokeDashoffset);
+      now = Date.parse('2026-10-09T00:00:00+08:00');
+      const deadline = performance.now() + 1500;
+      while (Number(ring.getAttribute('stroke-dashoffset')) > 1 && performance.now() < deadline) {
+        await new Promise(resolve => requestAnimationFrame(resolve));
+      }
+      // Let newly created CSS transitions resolve their shared timeline start.
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const animations = [[ring,'stroke-dashoffset'],[fill,'width'],[remaining,'left'],[marker,'left']]
+        .map(([element, property]) => element.getAnimations().find(animation => animation.transitionProperty === property));
+      const durations = animations.map(animation => animation?.effect.getComputedTiming().duration);
+      const starts = animations.map(animation => animation?.startTime);
+      const start = performance.now();
+      const samples = [];
+      for (const time of [150,400,650]) {
+        while (performance.now() - start < time) await new Promise(resolve => requestAnimationFrame(resolve));
+        const width = bar.getBoundingClientRect().width;
+        samples.push({ ring:Number.parseFloat(getComputedStyle(ring).strokeDashoffset),
+          fill:Number.parseFloat(getComputedStyle(fill).width) / width * 100,
+          remaining:Number.parseFloat(getComputedStyle(remaining).left) / width * 100,
+          // The marker travels between the existing 10px endpoint insets.
+          marker:(Number.parseFloat(getComputedStyle(marker).left) - 10) / (width - 20) * 100 });
+      }
+      await pause(300);
+      return { before, durations, starts, samples,
+        endRing:Number.parseFloat(getComputedStyle(ring).strokeDashoffset),
+        endFill:Number.parseFloat(getComputedStyle(fill).width) };
+    } finally { api.now = originalNow; }
+  });
+  console.log('Midnight recovery:', JSON.stringify(result));
+  check('Midnight ring and all horizontal progress parts use an 850ms recovery', result.durations.every(duration => duration === 850));
+  check('Midnight ring and horizontal recovery start in the same frame', result.starts.every(start => typeof start === 'number') && Math.max(...result.starts) - Math.min(...result.starts) < 1);
+  check('Midnight recovery visibly refills the ring instead of snapping', result.before > 99 && result.samples[0].ring > 50 && result.samples[0].ring < 99 && result.samples[2].ring > 0 && result.samples[2].ring < result.samples[0].ring);
+  check('Ring, horizontal fill, remaining segment and marker agree throughout recovery', result.samples.every(sample => ['fill','remaining','marker'].every(key => Math.abs(sample[key] - sample.ring) < .2)));
+  check('Midnight recovery reaches the full-day ring and empty elapsed bar together', result.endRing < .01 && result.endFill < .01);
+}
 (async () => {
   const original = execFileSync('git', ['show','df29141:index.html'], { cwd:root, encoding:'utf8' });
   const current = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
@@ -123,6 +173,7 @@ async function seamlessDayLanes(page) {
   check('Day remaining at noon is 50 percent', Math.abs(Number(await page.locator('#day-progress').getAttribute('aria-valuenow')) - 50) < .1);
   check('Clock has hands, ticks and a 24-hour face', await page.locator('.clock-hand').count() === 3 && await page.locator('#clock-ticks path').count() === 60 && (await page.locator('.clock-numbers').textContent()).includes('24'));
   check('Reduced motion disables sprint animations', await page.locator('#day-progress .sprint-remaining').evaluate(e => getComputedStyle(e, '::before').animationName === 'none'));
+  check('Reduced motion disables the ring recovery transition', await page.locator('#dial-progress').evaluate(e => getComputedStyle(e).transitionProperty === 'none'));
   check('Back page keeps only enlarged daily heading', (await page.locator('#back-title').textContent()) === '今日余量' && await page.locator('#back-title').evaluate(e => parseFloat(getComputedStyle(e).fontSize) >= 30) && !/让今天，慢慢充实|哪怕只向前一步/.test(await page.locator('#card-back').textContent()));
   check('Remaining day segment is brighter than completed segment', await page.locator('#day-progress').evaluate(e => getComputedStyle(e).backgroundColor !== getComputedStyle(e.querySelector('.sprint-fill')).backgroundColor));
   await shot(page, '02-card-reverse');
@@ -232,6 +283,7 @@ async function seamlessDayLanes(page) {
   const secondAngle = await interactive.locator('#clock-second').evaluate(e => Number(e.style.transform.match(/rotate\(([-.\d]+)deg\)/)[1]));
   await interactive.waitForTimeout(500);
   check('Countdown clock hands move backwards', await interactive.locator('#clock-second').evaluate(e => Number(e.style.transform.match(/rotate\(([-.\d]+)deg\)/)[1])) < secondAngle);
+  await synchronizedDayReset(interactive);
   check('Daily remaining segment carries active moving lanes', await interactive.locator('#day-progress .sprint-remaining').evaluate(e => getComputedStyle(e, '::before').animationName === 'day-lanes'));
   check('Daily sprint marker has its own beat and forward arrow', await interactive.locator('#day-marker').evaluate(e => getComputedStyle(e).animationName === 'day-beat' && getComputedStyle(e, '::before').animationName === 'day-arrow'));
   await seamlessDayLanes(interactive);

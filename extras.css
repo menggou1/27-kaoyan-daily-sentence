@@ -1,5 +1,5 @@
 /* New card reverse and calendar; the original countdown styles stay untouched. */
-:root{ --exam-fill:#8b5935; --exam-text:#fffaf2; --today-fill:#f1e5d6; --remaining-day:#ad4f26; --remaining-exam:#28675c; }
+:root{ --exam-fill:#8b5935; --exam-text:#fffaf2; --today-fill:#f1e5d6; --remaining-day:#ad4f26; --remaining-exam:#28675c; --day-progress-duration:.85s; }
 @media(prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --exam-fill:#d5a679; --exam-text:#211c18; --today-fill:#413328; --remaining-day:#efac75; --remaining-exam:#77c2a7; } }
 :root[data-theme="dark"]{ --exam-fill:#d5a679; --exam-text:#211c18; --today-fill:#413328; --remaining-day:#efac75; --remaining-exam:#77c2a7; }
 [hidden]{ display:none !important; }
@@ -24,7 +24,7 @@
 .clock-pin{ fill:var(--accent); stroke:var(--paper); stroke-width:1.2; }
 .is-resetting .clock-hand{ transition:none; }
 .dial-track{ fill:none; stroke:var(--shade); stroke-width:3; }
-.dial-progress{ fill:none; stroke:var(--accent); stroke-width:3; stroke-linecap:round; }
+.dial-progress{ fill:none; stroke:var(--accent); stroke-width:3; stroke-linecap:round; transition:stroke-dashoffset var(--day-progress-duration) linear; }
 .dial-readout{ display:flex; flex-direction:column; align-items:center; gap:7px; margin:0 0 26px; }
 .dial-caption{ font-size:13px; color:var(--ink-soft); letter-spacing:.12em; }
 .midnight-value{ font-family:'LXGW WenKai',serif; font-size:clamp(29px,8vw,43px); font-variant-numeric:tabular-nums; letter-spacing:.02em; color:var(--remaining-day); white-space:nowrap; }
@@ -38,6 +38,7 @@
 .day-progress .sprint-marker::before{ content:'»'; font:19px/1 system-ui,sans-serif; margin-top:-2px; }
 /* Project the 36px horizontal tile onto the 110deg gradient: 36 * sin(110deg). */
 .day-progress{ --lane-cycle:36px; --lane-normal:33.828934px; }
+.day-progress .sprint-fill,.day-progress .sprint-remaining,.day-progress .sprint-marker{ transition-duration:var(--day-progress-duration); }
 .day-progress .sprint-remaining::before{ content:''; position:absolute; inset:0 0 0 calc(-1 * var(--lane-cycle)); background:repeating-linear-gradient(110deg,transparent 0 calc(var(--lane-normal) / 3),rgba(255,255,255,.3) calc(var(--lane-normal) / 3) calc(var(--lane-normal) / 2),transparent calc(var(--lane-normal) / 2) var(--lane-normal)); background-size:var(--lane-cycle) 100%; }
 .day-progress.is-running .sprint-remaining::before{ animation:day-lanes .8s linear infinite; }
 .day-progress.is-running .sprint-marker{ animation:day-beat 1.6s ease-out infinite; }
@@ -178,5 +179,5 @@ html::-webkit-scrollbar-thumb,.calendar-dialog::-webkit-scrollbar-thumb,.archive
 @media(max-width:540px){ body{ position:relative; } .repo-link{ position:absolute; } }
 @media(max-width:540px){ .exam-strip{ gap:8px; } .exam-milestone{ padding:13px 12px; display:block; } .exam-date{ font-size:22px; } .exam-date small{ display:block; margin:3px 0 0; font-size:11px; } .exam-distance{ margin-top:9px !important; font-size:14px; } .calendar-intro{ font-size:12px; } .calendar-controls{ gap:12px; } .calendar-shortcuts{ width:100%; } .cal-year-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; } .cal-month-preview{ padding:11px 9px; } .cal-quarter-grid{ grid-template-columns:1fr; } .weekday-row,.day-grid{ gap:4px; } .cal-day{ min-height:47px; font-size:16px; border-radius:8px; } .cal-day small{ font-size:8px; } .quote-panel{ padding:20px; } .extra-actions .extra-button{ font-size:13px; padding:8px 12px; } }
 @media(max-width:359px){ .calendar-inner{ padding:15px; } .calendar-heading h2{ font-size:22px; } .zoom-tabs button{ padding:7px 14px; } .cal-day{ min-height:42px; } .day-dial{ width:min(240px,100%); } }
-@media(prefers-reduced-motion:reduce){ .clock-hand,.sprint-fill,.sprint-marker,.sprint-remaining{ transition:none; } .sprint-remaining::before,.sprint-marker,.sprint-marker::before{ animation:none !important; } }
+@media(prefers-reduced-motion:reduce){ .clock-hand,.dial-progress,.sprint-fill,.sprint-marker,.sprint-remaining{ transition:none; } .sprint-remaining::before,.sprint-marker,.sprint-marker::before{ animation:none !important; } }
 @media(prefers-reduced-motion:reduce){ .calendar-dialog .cal-day,.calendar-dialog .cal-month-preview{ transition:none; } }
