@@ -6,6 +6,7 @@ const path = require('node:path');
 const http = require('node:http');
 const { execFileSync } = require('node:child_process');
 const calendarHoverChecks = require('./calendar-hover.cjs');
+const clockRecoveryChecks = require('./clock-recovery.cjs');
 const root = path.resolve(__dirname, '..');
 const screenshotDir = process.env.SCREENSHOT_DIR;
 const types = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css', '.txt':'text/plain; charset=utf-8', '.svg':'image/svg+xml', '.ttf':'font/ttf' };
@@ -148,6 +149,11 @@ async function synchronizedDayReset(page) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const url = 'http://127.0.0.1:' + server.address().port;
   browser = await chromium.launch({ headless:true, ...(process.env.BROWSER_EXECUTABLE ? { executablePath:process.env.BROWSER_EXECUTABLE } : {}) });
+  if (process.argv.includes('--clock-only')) {
+    await clockRecoveryChecks(browser, url, check);
+    console.log(JSON.stringify({passed:results.length, checks:results}, null, 2));
+    return;
+  }
   const context = await browser.newContext({ viewport:{ width:1440, height:1000 }, timezoneId:'America/New_York', reducedMotion:'reduce' });
   const page = await context.newPage();
   const errors = [];
@@ -376,6 +382,7 @@ async function synchronizedDayReset(page) {
   check('Evening bar moves right to 75 percent while wording says 25 percent remaining', Math.abs(Number(await interactive.locator('#day-progress').getAttribute('aria-valuenow')) - 75) < .1 && /剩余 25/.test(await interactive.locator('#day-percent').textContent()));
   check('No runtime errors in normal motion or boundary cases', errors.length === 0);
 
+  await clockRecoveryChecks(browser, url, check);
   console.log(JSON.stringify({ passed:results.length, checks:results }, null, 2));
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
   if (browser) await browser.close();

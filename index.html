@@ -416,6 +416,7 @@ body{
   const TIME_API = 'https://utctime.app/api/now';
   const EXAM_TIME = Date.parse('2026-12-19T08:30:00+08:00');
   const SYNC_INTERVAL = 10 * 60 * 1000;
+  const CLOCK_GAP = 5000;
   const BEIJING_OFFSET = 8 * 60 * 60 * 1000;
 
   /* 显示、数据匹配和手动输入统一使用北京时间，不受设备时区影响。 */
@@ -468,15 +469,34 @@ body{
   const devFeedback = document.getElementById('dev-feedback');
   let networkClock = null;
   let simulatedClock = null;
-  let syncPending = false;
+  let syncPending = null;
   let lastSyncAttempt = -Infinity;
   let syncFailed = false;
+  let clockSample = { tick:performance.now(), wall:Date.now() };
   let key = '';
   let entries = null;
   let sourceErrors = new Set();
   let contentLoad = 0;
 
+  function sampleClock(resuming = false) {
+    const sample = { tick:performance.now(), wall:Date.now() };
+    const elapsed = sample.tick - clockSample.tick;
+    const wallElapsed = sample.wall - clockSample.wall;
+    const drift = wallElapsed - elapsed;
+    // 冻结/休眠时部分环境的单调时钟会停走。只在恢复或长回调间隔时
+    // 补回遗漏的正向时间；正常运行中的设备改时不直接改变网络时间。
+    if (Math.abs(drift) > 2000) {
+      if (networkClock && drift > 0 && (resuming || elapsed > CLOCK_GAP)) {
+        networkClock.time += drift;
+        syncFailed = true;
+      }
+      lastSyncAttempt = -Infinity;
+    }
+    clockSample = sample;
+  }
+
   function clockNow() {
+    sampleClock();
     const anchor = simulatedClock || networkClock;
     return anchor ? anchor.time + performance.now() - anchor.tick : Date.now();
   }
@@ -502,10 +522,16 @@ body{
   }
 
   async function syncClock(force = false) {
-    if (syncPending || (!force && performance.now() - lastSyncAttempt < SYNC_INTERVAL)) return;
-    syncPending = true;
+    if (syncPending) {
+      if (performance.now() - syncPending.tick < CLOCK_GAP
+          && Date.now() - syncPending.wall < CLOCK_GAP) return;
+      // 挂起前的请求及其超时回调都可能尚未结束，恢复时主动替换。
+      syncPending.controller.abort();
+    } else if (!force && performance.now() - lastSyncAttempt < SYNC_INTERVAL) return;
     lastSyncAttempt = performance.now();
     const controller = new AbortController();
+    const request = { controller, tick:performance.now(), wall:Date.now() };
+    syncPending = request;
     const timeout = setTimeout(() => controller.abort(), 5000);
     const start = performance.now();
     try {
@@ -513,18 +539,23 @@ body{
       if (!response.ok) throw new Error('HTTP ' + response.status);
       const data = await response.json();
       const end = performance.now();
+      if (syncPending !== request) return;
       if (!Number.isSafeInteger(data.unix_ms) || data.unix_ms < Date.UTC(2020, 0, 1)
-          || data.unix_ms > Date.UTC(2101, 0, 1) || end - start > 5000) throw new Error('无效的时间响应');
+          || data.unix_ms > Date.UTC(2101, 0, 1) || end - start > 5000
+          || Math.abs(Date.now() - request.wall - (end - start)) > 2000) throw new Error('无效的时间响应');
       // 近似补偿单程延迟；之后用单调时钟走动，避免设备改时造成跳变。
       networkClock = { time:data.unix_ms + (end - start) / 2, tick:end };
+      clockSample = { tick:end, wall:Date.now() };
       syncFailed = false;
     } catch (_) {
       // 初次失败使用本地时间；已有网络锚点时继续走动，保留上次校时结果。
-      syncFailed = true;
+      if (syncPending === request) syncFailed = true;
     } finally {
       clearTimeout(timeout);
-      syncPending = false;
-      updateClock();
+      if (syncPending === request) {
+        syncPending = null;
+        updateClock();
+      }
     }
   }
 
@@ -567,10 +598,18 @@ body{
     devPanel.close();
     syncClock(true);
   });
+  function resumeClock() {
+    sampleClock(true);
+    updateClock();
+    syncClock(true);
+  }
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) { updateClock(); syncClock(); }
+    if (!document.hidden) resumeClock();
   });
-  window.addEventListener('online', () => syncClock(true));
+  document.addEventListener('resume', resumeClock);
+  window.addEventListener('pageshow', resumeClock);
+  window.addEventListener('focus', resumeClock);
+  window.addEventListener('online', resumeClock);
 
   function render(text, meta, muted) {
     sentenceEl.textContent = text;

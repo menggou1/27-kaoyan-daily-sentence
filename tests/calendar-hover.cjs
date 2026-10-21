@@ -191,6 +191,8 @@ module.exports = async function calendarHoverChecks(page, check) {
   check('Reduced motion still highlights the actual date under the pointer', equal(await dates(), ['2026-06-04']));
   await page.emulateMedia({reducedMotion:'no-preference'});
   await page.emulateMedia({reducedMotion:'reduce'});
+  // Media change listeners run at a rendering opportunity, after emulateMedia returns.
+  await settle();
   await page.mouse.move(cells[3].x + 1, cells[3].y);
   check('Changing motion preference restores actual hover on the next in-cell move', equal(await dates(), ['2026-06-04']));
   await page.mouse.move(cells[6].right + 3, cells[0].y);
