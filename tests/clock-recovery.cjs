@@ -117,6 +117,24 @@ module.exports = async function clockRecoveryChecks(browser, url, check) {
     await page.waitForTimeout(50);
     check('Late pre-sleep response cannot overwrite recovered time', await page.evaluate(() => Math.abs(window.KaoyanExtras.now() - clockTest.server) < 1000));
 
+    const earlyRead = await page.evaluate(() => {
+      let hidden = true;
+      Object.defineProperty(document, 'hidden', { configurable:true, get:() => hidden });
+      document.dispatchEvent(new Event('visibilitychange'));
+      clockTest.mode = 'hold';
+      const before = window.KaoyanExtras.now();
+      clockTest.wall += 3600000;
+      clockTest.server += 3600000;
+      hidden = false;
+      const after = window.KaoyanExtras.now();
+      document.dispatchEvent(new Event('visibilitychange'));
+      return { elapsed:after - before, afterEvent:window.KaoyanExtras.now() - before };
+    });
+    check('Browser read before visibility event recovers one hour without a network response',
+      Math.abs(earlyRead.elapsed - 3600000) < 1000);
+    check('Browser visibility event does not add recovered time twice',
+      Math.abs(earlyRead.afterEvent - 3600000) < 1000);
+
     check('Clock recovery produces no runtime errors', errors.length === 0);
   } finally {
     await context.close();

@@ -473,6 +473,7 @@ body{
   let lastSyncAttempt = -Infinity;
   let syncFailed = false;
   let clockSample = { tick:performance.now(), wall:Date.now() };
+  let clockWasHidden = document.hidden;
   let key = '';
   let entries = null;
   let sourceErrors = new Set();
@@ -483,16 +484,18 @@ body{
     const elapsed = sample.tick - clockSample.tick;
     const wallElapsed = sample.wall - clockSample.wall;
     const drift = wallElapsed - elapsed;
-    // 冻结/休眠时部分环境的单调时钟会停走。只在恢复或长回调间隔时
-    // 补回遗漏的正向时间；正常运行中的设备改时不直接改变网络时间。
+    // 冻结/休眠时部分环境的单调时钟会停走。后台或刚恢复时的普通读时
+    // 也可能先于恢复事件执行，不能在未补时的情况下清掉这次时间差。
+    // 正常前台运行中的设备改时仍不直接改变网络时间。
     if (Math.abs(drift) > 2000) {
-      if (networkClock && drift > 0 && (resuming || elapsed > CLOCK_GAP)) {
+      if (networkClock && drift > 0 && (resuming || clockWasHidden || document.hidden || elapsed > CLOCK_GAP)) {
         networkClock.time += drift;
         syncFailed = true;
       }
       lastSyncAttempt = -Infinity;
     }
     clockSample = sample;
+    clockWasHidden = document.hidden;
   }
 
   function clockNow() {
@@ -604,7 +607,8 @@ body{
     syncClock(true);
   }
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) resumeClock();
+    if (document.hidden) clockWasHidden = true;
+    else resumeClock();
   });
   document.addEventListener('resume', resumeClock);
   window.addEventListener('pageshow', resumeClock);
