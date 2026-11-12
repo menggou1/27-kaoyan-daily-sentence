@@ -39,7 +39,7 @@ module.exports = async function clockRecoveryChecks(browser, url, check) {
         (['visibilitychange', 'resume'].includes(event) ? document : window).dispatchEvent(new Event(event));
         return { elapsed:window.KaoyanExtras.now() - before, requests:clockTest.requests - requests };
       }, event);
-      check(`Sleep recovery immediately catches up on ${event}`, Math.abs(result.elapsed - 7200000) < 1000);
+      check(`Sleep recovery waits for network verification on ${event}`, Math.abs(result.elapsed) < 1000);
       check(`Recovery forces network sync before ten-minute limit on ${event}`, result.requests === 1);
       await page.waitForFunction(() => Math.abs(window.KaoyanExtras.now() - clockTest.server) < 1000);
     }
@@ -63,8 +63,9 @@ module.exports = async function clockRecoveryChecks(browser, url, check) {
       document.dispatchEvent(new Event('resume'));
       return window.KaoyanExtras.now() - before;
     });
-    check('Offline wake retains network offset and catches up without refresh', Math.abs(offline - 7200000) < 1000);
+    check('Offline wake waits for the failed sync before estimating', Math.abs(offline) < 1000);
     await page.waitForFunction(() => document.getElementById('clock-status').textContent.includes('保持中'));
+    check('Offline wake estimates elapsed time after sync failure', await page.evaluate(() => Math.abs(window.KaoyanExtras.now() - clockTest.server) < 1000));
 
     const gap = await page.evaluate(() => {
       const before = window.KaoyanExtras.now();
@@ -73,7 +74,8 @@ module.exports = async function clockRecoveryChecks(browser, url, check) {
       clockTest.server += 7200000;
       return window.KaoyanExtras.now() - before;
     });
-    check('Long timer gap repairs stalled monotonic time without lifecycle events', Math.abs(gap - 7200000) < 1000);
+    check('Long timer gap defers its estimate until sync failure', Math.abs(gap - 6000) < 1000);
+    await page.waitForFunction(() => Math.abs(window.KaoyanExtras.now() - clockTest.server) < 1000);
     const tickingSleep = await page.evaluate(() => {
       const before = window.KaoyanExtras.now();
       clockTest.wall += 7200000;
@@ -100,6 +102,19 @@ module.exports = async function clockRecoveryChecks(browser, url, check) {
     });
     await page.waitForFunction(() => Math.abs(window.KaoyanExtras.now() - clockTest.server) < 1000);
     check('Watchdog resyncs a stalled clock even without a lifecycle event', await page.evaluate(() => Math.abs(window.KaoyanExtras.now() - clockTest.server) < 1000));
+
+    const wallJump = await page.evaluate(() => {
+      clockTest.mode = 'hold';
+      const before = window.KaoyanExtras.now();
+      clockTest.wall += 3600000;
+      window.dispatchEvent(new Event('focus'));
+      return window.KaoyanExtras.now() - before;
+    });
+    check('Device clock jump on focus does not shift verified time while syncing', Math.abs(wallJump) < 1000);
+    await page.waitForFunction(() => clockTest.pending.length === 1);
+    await page.evaluate(() => clockTest.pending.shift()(new Response(JSON.stringify({unix_ms:clockTest.server}))));
+    await page.waitForFunction(() => document.getElementById('clock-status').textContent.includes('已网络校时'));
+    check('Successful sync discards unverified device clock jump', await page.evaluate(() => Math.abs(window.KaoyanExtras.now() - clockTest.server) < 1000));
 
     await page.evaluate(() => { clockTest.mode = 'hold'; window.dispatchEvent(new Event('focus')); });
     await page.waitForFunction(() => clockTest.pending.length === 1);
