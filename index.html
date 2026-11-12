@@ -472,7 +472,6 @@ body{
   let syncPending = null;
   let lastSyncAttempt = -Infinity;
   let syncFailed = false;
-  let pendingClockDrift = 0;
   let clockSample = { tick:performance.now(), wall:Date.now() };
   let key = '';
   let entries = null;
@@ -484,12 +483,12 @@ body{
     const elapsed = sample.tick - clockSample.tick;
     const wallElapsed = sample.wall - clockSample.wall;
     const drift = wallElapsed - elapsed;
-    // 冻结/休眠时部分环境的单调时钟会停走；恢复或长回调间隔时
-    // 记录可能遗漏的时间，校时失败后再用设备时间估算。
+    // 冻结/休眠时部分环境的单调时钟会停走。只在恢复或长回调间隔时
+    // 补回遗漏的正向时间；正常运行中的设备改时不直接改变网络时间。
     if (Math.abs(drift) > 2000) {
       if (networkClock && drift > 0 && (resuming || elapsed > CLOCK_GAP)) {
-        // 设备时间也可能被调整；先等待网络校时，失败后才使用此估计。
-        pendingClockDrift += drift;
+        networkClock.time += drift;
+        syncFailed = true;
       }
       lastSyncAttempt = -Infinity;
     }
@@ -547,16 +546,10 @@ body{
       // 近似补偿单程延迟；之后用单调时钟走动，避免设备改时造成跳变。
       networkClock = { time:data.unix_ms + (end - start) / 2, tick:end };
       clockSample = { tick:end, wall:Date.now() };
-      pendingClockDrift = 0;
       syncFailed = false;
     } catch (_) {
       // 初次失败使用本地时间；已有网络锚点时继续走动，保留上次校时结果。
-      if (syncPending === request) {
-        sampleClock();
-        if (networkClock) networkClock.time += pendingClockDrift;
-        pendingClockDrift = 0;
-        syncFailed = true;
-      }
+      if (syncPending === request) syncFailed = true;
     } finally {
       clearTimeout(timeout);
       if (syncPending === request) {
