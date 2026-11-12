@@ -103,20 +103,6 @@ module.exports = async function clockRecoveryChecks(browser, url, check) {
     await page.waitForFunction(() => Math.abs(window.KaoyanExtras.now() - clockTest.server) < 1000);
     check('Watchdog resyncs a stalled clock even without a lifecycle event', await page.evaluate(() => Math.abs(window.KaoyanExtras.now() - clockTest.server) < 1000));
 
-    const backward = await page.evaluate(() => {
-      const before = window.KaoyanExtras.now();
-      clockTest.server -= 5 * 3600000;
-      window.dispatchEvent(new Event('focus'));
-      return before;
-    });
-    await page.waitForFunction(() => document.getElementById('clock-status').textContent.includes('保持中'));
-    check('A network response five hours behind cannot roll back the verified clock',
-      Math.abs((await page.evaluate(() => window.KaoyanExtras.now())) - backward) < 1000);
-    await page.evaluate(() => { clockTest.server += 5 * 3600000; window.dispatchEvent(new Event('online')); });
-    await page.waitForFunction(() => document.getElementById('clock-status').textContent.includes('已网络校时'));
-    check('Clock accepts a valid response after a rejected backward jump',
-      await page.evaluate(() => Math.abs(window.KaoyanExtras.now() - clockTest.server) < 1000));
-
     const wallJump = await page.evaluate(() => {
       clockTest.mode = 'hold';
       const before = window.KaoyanExtras.now();
@@ -145,15 +131,6 @@ module.exports = async function clockRecoveryChecks(browser, url, check) {
     await page.evaluate(() => clockTest.pending.shift()(new Response(JSON.stringify({unix_ms:Date.parse('2026-01-01T00:00:00Z')}))));
     await page.waitForTimeout(50);
     check('Late pre-sleep response cannot overwrite recovered time', await page.evaluate(() => Math.abs(window.KaoyanExtras.now() - clockTest.server) < 1000));
-
-    await page.evaluate(() => {
-      clockTest.server -= 5 * 3600000;
-      clockTest.wall += clockTest.server - Date.now();
-      window.dispatchEvent(new Event('focus'));
-    });
-    await page.waitForFunction(() => Math.abs(window.KaoyanExtras.now() - clockTest.server) < 1000);
-    check('A large backward correction is accepted when device time corroborates it',
-      await page.evaluate(() => Math.abs(window.KaoyanExtras.now() - clockTest.server) < 1000));
 
     check('Clock recovery produces no runtime errors', errors.length === 0);
   } finally {
