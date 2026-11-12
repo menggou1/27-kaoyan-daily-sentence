@@ -417,6 +417,8 @@ body{
   const EXAM_TIME = Date.parse('2026-12-19T08:30:00+08:00');
   const SYNC_INTERVAL = 10 * 60 * 1000;
   const CLOCK_GAP = 5000;
+  const MAX_UNCONFIRMED_BACKWARD = 60 * 1000;
+  const RETRY_INTERVAL = 30 * 1000;
   const BEIJING_OFFSET = 8 * 60 * 60 * 1000;
 
   /* 显示、数据匹配和手动输入统一使用北京时间，不受设备时区影响。 */
@@ -528,7 +530,7 @@ body{
           && Date.now() - syncPending.wall < CLOCK_GAP) return;
       // 挂起前的请求及其超时回调都可能尚未结束，恢复时主动替换。
       syncPending.controller.abort();
-    } else if (!force && performance.now() - lastSyncAttempt < SYNC_INTERVAL) return;
+    } else if (!force && performance.now() - lastSyncAttempt < (syncFailed ? RETRY_INTERVAL : SYNC_INTERVAL)) return;
     lastSyncAttempt = performance.now();
     const controller = new AbortController();
     const request = { controller, tick:performance.now(), wall:Date.now() };
@@ -544,8 +546,15 @@ body{
       if (!Number.isSafeInteger(data.unix_ms) || data.unix_ms < Date.UTC(2020, 0, 1)
           || data.unix_ms > Date.UTC(2101, 0, 1) || end - start > 5000
           || Math.abs(Date.now() - request.wall - (end - start)) > 2000) throw new Error('无效的时间响应');
+      // 拒绝明显倒退的单次响应，除非设备时间也支持该校正；保留已有锚点并稍后重试。
+      const correctedTime = data.unix_ms + (end - start) / 2;
+      const previousTime = networkClock && networkClock.time + end - networkClock.tick;
+      if (networkClock && correctedTime < previousTime - MAX_UNCONFIRMED_BACKWARD
+          && Math.abs(correctedTime - Date.now()) > MAX_UNCONFIRMED_BACKWARD) {
+        throw new Error('网络时间异常倒退');
+      }
       // 近似补偿单程延迟；之后用单调时钟走动，避免设备改时造成跳变。
-      networkClock = { time:data.unix_ms + (end - start) / 2, tick:end };
+      networkClock = { time:correctedTime, tick:end };
       clockSample = { tick:end, wall:Date.now() };
       pendingClockDrift = 0;
       syncFailed = false;
