@@ -1,30 +1,31 @@
+const sessionWithEvidence = require('./browser-evidence.cjs');
+
 // Independent wall/monotonic clocks reproduce hours of sleep without real waits.
 module.exports = async function clockRecoveryChecks(browser, url, check) {
-  const context = await browser.newContext({ timezoneId:'UTC', reducedMotion:'reduce' });
-  await context.addInitScript(() => {
-    const wallNow = Date.now.bind(Date);
-    const tickNow = performance.now.bind(performance);
-    const realFetch = window.fetch.bind(window);
-    const state = window.clockTest = {
-      wall:0, tick:0, server:Date.parse('2026-10-08T23:00:00+08:00'),
-      requests:0, mode:'ok', pending:[]
-    };
-    Date.now = () => wallNow() + state.wall;
-    performance.now = () => tickNow() + state.tick;
-    window.fetch = (input, options) => {
-      if (input !== 'https://utctime.app/api/now') return realFetch(input, options);
-      state.requests++;
-      const response = () => new Response(JSON.stringify({unix_ms:state.server}));
-      if (state.mode === 'fail') return Promise.reject(new TypeError('Offline'));
-      // Deliberately ignore abort: even a late old response must not win.
-      if (state.mode === 'hold') return new Promise(resolve => state.pending.push(resolve));
-      return Promise.resolve(response());
-    };
-  });
-  const page = await context.newPage();
-  const errors = [];
-  page.on('pageerror', error => errors.push(error.message));
-  try {
+  await sessionWithEvidence(browser, 'clock-recovery', {timezoneId:'UTC', reducedMotion:'reduce'}, async context => {
+    await context.addInitScript(() => {
+      const wallNow = Date.now.bind(Date);
+      const tickNow = performance.now.bind(performance);
+      const realFetch = window.fetch.bind(window);
+      const state = window.clockTest = {
+        wall:0, tick:0, server:Date.parse('2026-10-08T23:00:00+08:00'),
+        requests:0, mode:'ok', pending:[]
+      };
+      Date.now = () => wallNow() + state.wall;
+      performance.now = () => tickNow() + state.tick;
+      window.fetch = (input, options) => {
+        if (input.split('?')[0] !== 'https://utctime.app/api/now') return realFetch(input, options);
+        state.requests++;
+        const response = () => new Response(JSON.stringify({unix_ms:state.server}));
+        if (state.mode === 'fail') return Promise.reject(new TypeError('Offline'));
+        // Deliberately ignore abort: even a late old response must not win.
+        if (state.mode === 'hold') return new Promise(resolve => state.pending.push(resolve));
+        return Promise.resolve(response());
+      };
+    });
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
     await page.goto(url);
     await page.waitForFunction(() => document.getElementById('clock-status').textContent.includes('已网络校时'));
     for (const event of ['visibilitychange', 'focus', 'resume', 'pageshow', 'online']) {
@@ -136,7 +137,5 @@ module.exports = async function clockRecoveryChecks(browser, url, check) {
       Math.abs(earlyRead.afterEvent - 3600000) < 1000);
 
     check('Clock recovery produces no runtime errors', errors.length === 0);
-  } finally {
-    await context.close();
-  }
+  });
 };

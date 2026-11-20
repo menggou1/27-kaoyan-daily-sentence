@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { webcrypto } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const baseline = process.argv.includes('--baseline');
@@ -50,7 +51,7 @@ class Element extends EventTarget {
 async function createPage({ hidden = false, wallOffset = 0, offline = false } = {}) {
   const state = {
     wall:START + wallOffset, tick:1000, server:START,
-    hold:false, offline, intervals:[], pending:[], requests:0
+    hold:false, offline, intervals:[], pending:[], requests:0, calls:[], timeouts:new Map()
   };
   const elements = new Map();
   const get = id => {
@@ -64,20 +65,26 @@ async function createPage({ hidden = false, wallOffset = 0, offline = false } = 
     createDocumentFragment:() => new Element()
   });
   const sandbox = Object.assign(new EventTarget(), {
-    document, console, Event, AbortController, TextDecoder,
+    document, console, Event, AbortController, TextDecoder, crypto:webcrypto,
     Date:class extends Date { static now() { return state.wall; } },
     performance:{ now:() => state.tick },
     localStorage:{ getItem:() => null },
     atob:value => Buffer.from(value, 'base64').toString('binary'),
     requestAnimationFrame:callback => { callback(state.tick); return 1; },
     setInterval:(callback, ms) => state.intervals.push({ callback, ms }),
-    setTimeout:() => 1, clearTimeout:() => {},
+    setTimeout:(callback, ms) => {
+      const id = Symbol();
+      state.timeouts.set(id, { callback, ms });
+      return id;
+    },
+    clearTimeout:id => state.timeouts.delete(id),
     matchMedia:() => Object.assign(new EventTarget(), { matches:true }),
-    fetch:input => {
-      if (input !== 'https://utctime.app/api/now') {
+    fetch:(input, options) => {
+      if (input.split('?')[0] !== 'https://utctime.app/api/now') {
         return Promise.resolve(new Response(fs.readFileSync(path.resolve(root, input))));
       }
       state.requests++;
+      state.calls.push({ url:input, ...options });
       if (state.offline) return Promise.reject(new TypeError('Offline'));
       if (state.hold) return new Promise(resolve => state.pending.push(resolve));
       return Promise.resolve(new Response(JSON.stringify({ unix_ms:state.server })));
@@ -215,6 +222,73 @@ const readers = [
   simulated.state.intervals[0].callback();
   show(simulated);
   check('Recovery does not change the independent simulated time anchor', simulated.now() === simulationStart + 250);
+
+  const requests = await createPage({ wallOffset:5 * HOUR });
+  requests.sandbox.dispatchEvent(new Event('pageshow'));
+  await requests.flush();
+  const reconstructed = await createPage({ wallOffset:5 * HOUR });
+  const calls = [...requests.state.calls, ...reconstructed.state.calls];
+  check('Requests get distinct keys at identical wall and monotonic readings and across fresh documents',
+    calls.length === 3 && new Set(calls.map(call => call.url)).size === 3
+    && calls.every(call => new URL(call.url).searchParams.has('_sync')));
+  check('Requests keep no-store and reject redirects to shared cache keys',
+    calls.every(call => call.cache === 'no-store' && call.credentials === 'omit' && call.redirect === 'error'));
+  check('An incorrect device clock does not prevent initial network sync', requests.now() === START && reconstructed.now() === START);
+
+  const interval = 10 * 60 * 1000;
+  const periodic = await createPage();
+  const tick = () => periodic.state.intervals[0].callback();
+  const advance = ms => {
+    periodic.state.wall += ms;
+    periodic.state.tick += ms;
+    periodic.state.server += ms;
+  };
+  advance(interval - 1);
+  tick();
+  periodic.state.intervals[1].callback();
+  check('Normal ticking advances both countdowns without fetching before ten minutes',
+    periodic.state.requests === 1 && periodic.now() === START + interval - 1
+    && examSeconds(periodic) === Math.ceil((EXAM - periodic.now()) / 1000)
+    && periodic.get('midnight-countdown').textContent === '00:50:01');
+  advance(1);
+  tick();
+  await periodic.flush();
+  check('Ten-minute watchdog accepts the next sample on a new URL', periodic.state.requests === 2
+    && periodic.state.calls[0].url !== periodic.state.calls[1].url && periodic.now() === periodic.state.server);
+
+  const rejected = await createPage();
+  const startRequest = () => {
+    rejected.state.hold = true;
+    rejected.sandbox.dispatchEvent(new Event('online'));
+  };
+  for (const [reason, response] of [
+    ['HTTP 503', new Response(JSON.stringify({unix_ms:START - 5 * HOUR}), {status:503})],
+    ['HTTP 200 with invalid data', new Response(JSON.stringify({unix_ms:String(START)}))]
+  ]) {
+    startRequest();
+    rejected.state.pending.shift()(response);
+    await rejected.flush();
+    check(`${reason} does not replace the running anchor`, rejected.now() === START
+      && /保持中/.test(rejected.get('clock-status').textContent) && rejected.state.timeouts.size === 0);
+  }
+  startRequest();
+  const [{callback: expire, ms}] = rejected.state.timeouts.values();
+  rejected.state.tick += ms;
+  rejected.state.wall += ms;
+  rejected.state.server += ms;
+  expire();
+  // Deliver a valid JSON 200 exactly at the deadline despite aborting, to model a late completion race.
+  rejected.state.pending.shift()(new Response(JSON.stringify({unix_ms:START - 5 * HOUR})));
+  await rejected.flush();
+  check('A canceled attempt cannot install a valid-looking timestamp at the deadline', ms === 5000
+    && rejected.state.calls.at(-1).signal.aborted && rejected.state.timeouts.size === 0
+    && rejected.now() === START + ms && /保持中/.test(rejected.get('clock-status').textContent));
+  rejected.state.hold = false;
+  rejected.state.wall -= 5 * HOUR;
+  rejected.sandbox.dispatchEvent(new Event('online'));
+  await rejected.flush();
+  check('After failure, success without reload clears the failure state even with an incorrect device clock',
+    rejected.now() === rejected.state.server && /已网络校时/.test(rejected.get('clock-status').textContent));
 
   const summary = { mode:baseline ? 'baseline HEAD' : 'working tree', passed:checks.filter(item => item.passed).length, total:checks.length, checks };
   console.log(JSON.stringify(summary, null, 2));

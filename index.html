@@ -414,6 +414,9 @@ body{
   const pad2 = n => String(n).padStart(2, '0');
 
   const TIME_API = 'https://utctime.app/api/now';
+  // 历史恢复可能复用同 URL 的缓存。文档间用随机标识隔离，文档内用序号区分。
+  const timeDocumentId = crypto.getRandomValues(new Uint32Array(4)).join('-');
+  let timeRequestSequence = 0;
   const EXAM_TIME = Date.parse('2026-12-19T08:30:00+08:00');
   const SYNC_INTERVAL = 10 * 60 * 1000;
   const CLOCK_GAP = 5000;
@@ -535,19 +538,20 @@ body{
     const controller = new AbortController();
     const request = { controller, tick:performance.now(), wall:Date.now() };
     syncPending = request;
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const start = performance.now();
+    const timeout = setTimeout(() => controller.abort(), CLOCK_GAP);
     try {
-      const response = await fetch(TIME_API, { cache:'no-store', credentials:'omit', signal:controller.signal });
+      const url = `${TIME_API}?_sync=${timeDocumentId}-${++timeRequestSequence}`;
+      const response = await fetch(url, { cache:'no-store', credentials:'omit', redirect:'error', signal:controller.signal });
       if (!response.ok) throw new Error('HTTP ' + response.status);
       const data = await response.json();
       const end = performance.now();
       if (syncPending !== request) return;
-      if (!Number.isSafeInteger(data.unix_ms) || data.unix_ms < Date.UTC(2020, 0, 1)
-          || data.unix_ms > Date.UTC(2101, 0, 1) || end - start > 5000
-          || Math.abs(Date.now() - request.wall - (end - start)) > 2000) throw new Error('无效的时间响应');
+      const elapsed = end - request.tick;
+      if (controller.signal.aborted || !Number.isSafeInteger(data.unix_ms) || data.unix_ms < Date.UTC(2020, 0, 1)
+          || data.unix_ms > Date.UTC(2101, 0, 1) || elapsed > CLOCK_GAP
+          || Math.abs(Date.now() - request.wall - elapsed) > 2000) throw new Error('无效的时间响应');
       // 近似补偿单程延迟；之后用单调时钟走动，避免设备改时造成跳变。
-      networkClock = { time:data.unix_ms + (end - start) / 2, tick:end };
+      networkClock = { time:data.unix_ms + elapsed / 2, tick:end };
       clockSample = { tick:end, wall:Date.now() };
       syncFailed = false;
     } catch (_) {

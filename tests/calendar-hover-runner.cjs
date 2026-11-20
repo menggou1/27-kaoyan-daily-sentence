@@ -32,7 +32,7 @@ let browser;
   const page = await browser.newPage({viewport:{width:1100,height:900},timezoneId:'UTC'});
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.route('https://utctime.app/api/now', route => route.fulfill({json:{unix_ms:Date.parse('2026-10-08T12:00:00+08:00')}}));
+  await page.route(/^https:\/\/utctime\.app\/api\/now(?:\?|$)/, route => route.fulfill({json:{unix_ms:Date.parse('2026-10-08T12:00:00+08:00')}}));
   await page.goto('http://127.0.0.1:' + server.address().port);
   await page.locator('#calendar-open').click();
   await page.waitForFunction(() => !document.getElementById('quote-copy').disabled);

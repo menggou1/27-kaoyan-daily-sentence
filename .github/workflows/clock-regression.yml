@@ -1,0 +1,60 @@
+name: Clock regression
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clock:
+    name: Clock regression (${{ matrix.browser }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            browser: Edge
+            channel: msedge
+          - os: ubuntu-latest
+            browser: Chromium
+            channel: chromium
+    env:
+      BROWSER_CHANNEL: ${{ matrix.channel }}
+      TEST_ARTIFACTS: ${{ github.workspace }}/test-results
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: npm ci --prefix tests --no-audit --no-fund
+      - name: Install Chromium on Linux
+        if: runner.os == 'Linux'
+        working-directory: tests
+        run: npx playwright install --with-deps --no-shell chromium
+      - name: Run clock regression checks
+        shell: bash
+        run: |
+          mkdir -p test-results
+          node tests/clock-ordering.cjs 2>&1 | tee test-results/clock-ordering.log
+          node tests/ui-check.cjs --clock-only 2>&1 | tee test-results/browser.log
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: clock-regression-${{ matrix.browser }}
+          path: test-results/
+          if-no-files-found: warn

@@ -7,10 +7,12 @@ const http = require('node:http');
 const { execFileSync } = require('node:child_process');
 const calendarHoverChecks = require('./calendar-hover.cjs');
 const clockRecoveryChecks = require('./clock-recovery.cjs');
+const clockHttp = require('./clock-http.cjs');
 const root = path.resolve(__dirname, '..');
 const screenshotDir = process.env.SCREENSHOT_DIR;
 const types = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css', '.txt':'text/plain; charset=utf-8', '.svg':'image/svg+xml', '.ttf':'font/ttf' };
 const server = http.createServer((req, res) => {
+  if (clockHttp.handle(req, res)) return;
   let file;
   try { file = path.resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname === '/' ? '/index.html' : new URL(req.url, 'http://localhost').pathname)); }
   catch (_) { res.writeHead(400).end(); return; }
@@ -148,8 +150,10 @@ async function synchronizedDayReset(page) {
   ]) check(name, original.match(pattern)[0].replace(/\r/g,'') === current.match(pattern)[0].replace(/\r/g,''));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const url = 'http://127.0.0.1:' + server.address().port;
-  browser = await chromium.launch({ headless:true, ...(process.env.BROWSER_EXECUTABLE ? { executablePath:process.env.BROWSER_EXECUTABLE } : {}) });
+  browser = await chromium.launch({ headless:true, channel:process.env.BROWSER_CHANNEL, executablePath:process.env.BROWSER_EXECUTABLE });
+  console.log(`Browser ${process.env.BROWSER_CHANNEL || 'chromium'} ${browser.version()}`);
   if (process.argv.includes('--clock-only')) {
+    await clockHttp.check(browser, url, check);
     await clockRecoveryChecks(browser, url, check);
     console.log(JSON.stringify({passed:results.length, checks:results}, null, 2));
     return;
@@ -158,7 +162,7 @@ async function synchronizedDayReset(page) {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.route('https://utctime.app/api/now', route => route.fulfill({ json:{ unix_ms:Date.parse('2026-10-08T12:00:00+08:00') } }));
+  await page.route(/^https:\/\/utctime\.app\/api\/now(?:\?|$)/, route => route.fulfill({ json:{ unix_ms:Date.parse('2026-10-08T12:00:00+08:00') } }));
   await page.goto(url);
   await page.waitForFunction(() => document.getElementById('sentence').textContent !== '正在载入…');
   check('Beijing date despite New York device timezone', await page.locator('#date').textContent() === '10-08');
@@ -280,7 +284,7 @@ async function synchronizedDayReset(page) {
   const interactive = await normal.newPage();
   interactive.on('pageerror', error => errors.push(error.message));
   let legacyFailure = true;
-  await interactive.route('https://utctime.app/api/now', route => route.fulfill({json:{unix_ms:Date.parse('2026-10-08T12:00:00+08:00')}}));
+  await interactive.route(/^https:\/\/utctime\.app\/api\/now(?:\?|$)/, route => route.fulfill({json:{unix_ms:Date.parse('2026-10-08T12:00:00+08:00')}}));
   await interactive.route(url => decodeURIComponent(url.pathname).includes('古早版'), route => legacyFailure ? route.fulfill({status:503,body:'Unavailable'}) : route.continue());
   await interactive.goto(url);
   await interactive.locator('#card-flip').click();
@@ -382,6 +386,7 @@ async function synchronizedDayReset(page) {
   check('Evening bar moves right to 75 percent while wording says 25 percent remaining', Math.abs(Number(await interactive.locator('#day-progress').getAttribute('aria-valuenow')) - 75) < .1 && /剩余 25/.test(await interactive.locator('#day-percent').textContent()));
   check('No runtime errors in normal motion or boundary cases', errors.length === 0);
 
+  await clockHttp.check(browser, url, check);
   await clockRecoveryChecks(browser, url, check);
   console.log(JSON.stringify({ passed:results.length, checks:results }, null, 2));
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {

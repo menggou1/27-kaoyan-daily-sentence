@@ -1,0 +1,59 @@
+name: Real Edge tab discard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - index.html
+      - extras.js
+      - calendar.js
+      - tests/edge-clock-discard.cjs
+      - .github/workflows/edge-clock-discard.yml
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Clock endpoint to verify
+        required: true
+        type: choice
+        default: local-cache
+        options: [local-cache, live-utctime]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.scenario || 'local-cache' }}
+  cancel-in-progress: true
+
+jobs:
+  discard:
+    name: Real Edge discard (${{ inputs.scenario || 'local-cache' }})
+    runs-on: windows-latest
+    timeout-minutes: 5
+    env:
+      TEST_ARTIFACTS: ${{ github.workspace }}/test-results
+      CLOCK_SCENARIO: ${{ inputs.scenario || 'local-cache' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Discard and restore the Edge tab
+        shell: bash
+        run: |
+          mkdir -p test-results
+          if [[ "$CLOCK_SCENARIO" == 'live-utctime' ]]; then
+            node tests/edge-clock-discard.cjs --live 2>&1 | tee test-results/edge.log
+          else
+            node tests/edge-clock-discard.cjs 2>&1 | tee test-results/edge.log
+          fi
+      - name: Upload lifecycle and network evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: edge-discard-${{ env.CLOCK_SCENARIO }}
+          path: test-results/
+          if-no-files-found: warn
